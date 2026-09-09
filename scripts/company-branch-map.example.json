@@ -1,0 +1,22 @@
+{
+  "companies": {
+    "company-example": {
+      "companyName": "Example Restaurant Group",
+      "ownerUids": [
+        "REPLACE_WITH_OWNER_UID"
+      ],
+      "branches": {
+        "branch1": {
+          "branchName": "Branch 1",
+          "userIds": [
+            "REPLACE_WITH_OWNER_UID"
+          ]
+        },
+        "branch2": {
+          "branchName": "Branch 2",
+          "userIds": []
+        }
+      }
+    }
+  }
+}

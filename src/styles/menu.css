@@ -1,0 +1,94 @@
+/* ── Menu management ─────────────────────────────────────────── */
+
+.menu__cat { margin-bottom: var(--sp-6); }
+
+.menu__catHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+  flex-wrap: wrap;
+}
+
+.menu__catTitle { display: flex; align-items: center; gap: 10px; }
+
+.menu__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--sp-4);
+}
+
+.menu-item { overflow: hidden; display: grid; align-content: start; }
+
+.menu-item__img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  background: var(--surface-3);
+  display: grid;
+  place-items: center;
+  color: var(--text-3);
+}
+
+.menu-item__body { padding: var(--sp-4); display: grid; gap: 8px; }
+
+.menu-item__name { font-weight: 650; color: var(--text-1); display: flex; align-items: center; gap: 6px; }
+
+.menu-item__price { font-family: var(--font-mono); font-weight: 700; color: var(--primary); }
+
+.menu-item__actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.menu-item__sizes { display: flex; gap: 5px; flex-wrap: wrap; }
+.menu-item__sizes .pill { font-size: 0.66rem; padding: 3px 7px; }
+
+/* Size editor rows in the item modal */
+.menu-sizes {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface-2);
+}
+
+.menu-sizes__row {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 0;
+}
+
+.menu-sizes__row--fixed {
+  grid-template-columns: 1.2fr 1fr auto;
+  color: var(--text-2);
+  border-bottom: 1px dashed var(--border);
+  margin-bottom: 4px;
+}
+
+.menu-sizes__name { font-weight: 650; font-size: var(--text-sm); color: var(--text-1); }
+.menu-sizes__mod { font-size: var(--text-sm); }
+.menu-sizes__final {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--primary);
+  white-space: nowrap;
+  text-align: right;
+}
+
+@media (max-width: 480px) {
+  .menu-sizes__row { grid-template-columns: 1fr 1fr; }
+  .menu-sizes__row--fixed { grid-template-columns: 1fr 1fr; }
+  .menu-sizes__final { grid-column: 1; text-align: left; }
+}
+
+.menu-item--unavailable .menu-item__img { filter: grayscale(0.9); opacity: 0.55; }
+
+.menu__addCat {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+@media (max-width: 560px) { .menu__grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 400px) { .menu__grid { grid-template-columns: 1fr; } }

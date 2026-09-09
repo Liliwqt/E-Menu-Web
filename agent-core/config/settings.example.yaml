@@ -1,0 +1,9 @@
+# Non-secret runtime defaults. Environment variables take precedence.
+environment: development
+service_name: touchorders-agent-core
+database_url: sqlite:///./touchorders.db
+log_level: INFO
+log_json: true
+firebase_database_url: null
+auth_jwt_issuer: null
+auth_jwt_audience: null

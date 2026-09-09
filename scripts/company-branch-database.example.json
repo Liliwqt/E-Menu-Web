@@ -1,0 +1,203 @@
+{
+  "company-sugar-cafe": {
+      "companyProfile": {
+        "companyId": "company-sugar-cafe",
+        "companyName": "Sugar Cafe Group",
+        "ownerUids": {
+          "manager-uid-001": true
+        },
+        "createdAt": 1778000000000,
+        "updatedAt": 1778000000000
+      },
+      "users": {
+        "manager-uid-001": {
+          "uid": "manager-uid-001",
+          "email": "manager@example.com",
+          "displayName": "Cafe Manager",
+          "provider": "google",
+          "companyId": "company-sugar-cafe",
+          "companyRole": "owner",
+          "branchIds": {
+            "branch-sugar-cafe-nivel-hills": true,
+            "branch-sugar-cafe-it-park": true
+          },
+          "createdAt": 1778000000000,
+          "updatedAt": 1778000000000
+        },
+        "staff-uid-001": {
+          "uid": "staff-uid-001",
+          "email": "staff@example.com",
+          "displayName": "Branch Staff",
+          "provider": "password",
+          "companyId": "company-sugar-cafe",
+          "companyRole": "staff",
+          "branchIds": {
+            "branch-sugar-cafe-nivel-hills": true
+          },
+          "createdAt": 1778000000000,
+          "updatedAt": 1778000000000
+        }
+      },
+      "branches": {
+        "branch-sugar-cafe-nivel-hills": {
+          "branchProfile": {
+            "branchId": "branch-sugar-cafe-nivel-hills",
+            "branchName": "Nivel Hills",
+            "companyId": "company-sugar-cafe",
+            "companyName": "Sugar Cafe Group",
+            "ownerUid": "manager-uid-001",
+            "location": "Nivel Hills, Cebu City",
+            "serviceType": "cafe",
+            "contactPhone": "+63 917 123 4567",
+            "currency": "PHP",
+            "timezone": "Asia/Manila",
+            "operatingHours": "Mon-Sun, 7:00 AM-9:00 PM",
+            "plan": "subscription",
+            "subscriptionStatus": "trialing",
+            "trialEndsAt": 1779209600000,
+            "createdAt": 1778000000000,
+            "updatedAt": 1778000000000
+          },
+          "users": {
+            "manager-uid-001": {
+              "uid": "manager-uid-001",
+              "role": "owner",
+              "addedAt": 1778000000000
+            },
+            "staff-uid-001": {
+              "uid": "staff-uid-001",
+              "role": "staff",
+              "addedAt": 1778000000000
+            }
+          },
+          "kiosks": {
+            "kiosk-uid-001": {
+              "kioskUid": "kiosk-uid-001",
+              "name": "Nivel Hills Kiosk 1",
+              "isActive": true,
+              "registeredAt": 1778000000000,
+              "lastActiveAt": 1778000000000
+            }
+          },
+          "appSettings": {
+            "businessName": "Sugar Cafe Group",
+            "branchLocation": "Nivel Hills, Cebu City",
+            "currency": "PHP",
+            "timezone": "Asia/Manila",
+            "operatingHours": "Mon-Sun, 7:00 AM-9:00 PM",
+            "backgroundTheme": "Default"
+          },
+          "categories": {},
+          "inventory": {},
+          "logs": {},
+          "deletedLogs": {},
+          "analytics": {},
+          "inventoryHistory": {},
+          "menuLogs": {},
+          "shiftHandoffs": {},
+          "aiUsage": {}
+        },
+        "branch-sugar-cafe-it-park": {
+          "branchProfile": {
+            "branchId": "branch-sugar-cafe-it-park",
+            "branchName": "IT Park",
+            "companyId": "company-sugar-cafe",
+            "companyName": "Sugar Cafe Group",
+            "ownerUid": "manager-uid-001",
+            "location": "IT Park, Cebu City",
+            "serviceType": "cafe",
+            "currency": "PHP",
+            "timezone": "Asia/Manila",
+            "plan": "subscription",
+            "subscriptionStatus": "trialing"
+          },
+          "users": {},
+          "kiosks": {},
+          "appSettings": {},
+          "categories": {},
+          "inventory": {},
+          "logs": {},
+          "analytics": {}
+        }
+      }
+    },
+  "company-example-restaurant": {
+      "companyProfile": {
+        "companyId": "company-example-restaurant",
+        "companyName": "Example Restaurant Company",
+        "ownerUids": {
+          "manager-uid-002": true
+        },
+        "createdAt": 1778000000000,
+        "updatedAt": 1778000000000
+      },
+      "users": {
+        "manager-uid-002": {
+          "uid": "manager-uid-002",
+          "email": "owner@example.com",
+          "displayName": "Restaurant Owner",
+          "provider": "password",
+          "companyId": "company-example-restaurant",
+          "companyRole": "owner",
+          "branchIds": {
+            "branch-example-main": true,
+            "branch-example-second": true
+          },
+          "createdAt": 1778000000000,
+          "updatedAt": 1778000000000
+        }
+      },
+      "branches": {
+        "branch-example-main": {
+          "branchProfile": {
+            "branchId": "branch-example-main",
+            "branchName": "Main Branch",
+            "companyId": "company-example-restaurant",
+            "companyName": "Example Restaurant Company",
+            "ownerUid": "manager-uid-002",
+            "location": "Downtown",
+            "serviceType": "restaurant",
+            "currency": "PHP",
+            "timezone": "Asia/Manila",
+            "plan": "free",
+            "subscriptionStatus": "inactive"
+          },
+          "users": {
+            "manager-uid-002": {
+              "uid": "manager-uid-002",
+              "role": "owner",
+              "addedAt": 1778000000000
+            }
+          },
+          "kiosks": {},
+          "appSettings": {},
+          "categories": {},
+          "inventory": {},
+          "logs": {},
+          "analytics": {}
+        },
+        "branch-example-second": {
+          "branchProfile": {
+            "branchId": "branch-example-second",
+            "branchName": "Second Branch",
+            "companyId": "company-example-restaurant",
+            "companyName": "Example Restaurant Company",
+            "ownerUid": "manager-uid-002",
+            "location": "Uptown",
+            "serviceType": "restaurant",
+            "currency": "PHP",
+            "timezone": "Asia/Manila",
+            "plan": "free",
+            "subscriptionStatus": "inactive"
+          },
+          "users": {},
+          "kiosks": {},
+          "appSettings": {},
+          "categories": {},
+          "inventory": {},
+          "logs": {},
+          "analytics": {}
+        }
+      }
+    }
+}

@@ -1,0 +1,347 @@
+/* ── Login — Version 1 aesthetic, faithfully restored ─────────────
+   Matches the reference project: café photo backdrop, solid #2d2d2d
+   card with 8px radius, gold #c4a574 branding, flat #a08050 button
+   and tagline, #3a3a3a inputs. Modern touches kept deliberately
+   subtle: focus rings, inline loading spinner, safe-area padding. */
+
+.lg__page {
+  min-height: 100dvh;
+  background-image: url(/background_image.jpg.webp);
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  padding-top: max(20px, env(safe-area-inset-top));
+  padding-bottom: max(20px, env(safe-area-inset-bottom));
+}
+
+.lg__box {
+  width: 100%;
+  max-width: 420px;
+  background: #2d2d2d;
+  border-radius: 8px;
+  padding: 40px 48px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  animation: lgCardIn 500ms var(--ease-out) backwards;
+}
+
+@keyframes lgCardIn {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.lg__logoSection {
+  text-align: center;
+  margin-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.lg__brandName {
+  font-family: 'Fraunces', serif;
+  font-size: 32px;
+  font-weight: 700;
+  color: #c4a574;
+  margin: 0;
+  letter-spacing: 1px;
+  line-height: 1.2;
+}
+
+
+.lg__tagline {
+  background: #a08050;
+  color: #f5e6d3;
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  margin-top: 12px;
+  border-radius: 4px;
+}
+
+.lg__form { display: flex; flex-direction: column; gap: 20px; }
+
+.lg__group { display: flex; flex-direction: column; gap: 8px; }
+
+.lg__label { font-size: 14px; font-weight: 600; color: #c4a574; }
+
+.lg__input {
+  padding: 12px 14px;
+  min-height: 46px;
+  border: 1px solid #5a5a5a;
+  border-radius: 4px;
+  font-size: 14px;
+  font-family: inherit;
+  background: #3a3a3a;
+  color: #f5e6d3;
+  transition: border-color 250ms ease, box-shadow 250ms ease;
+}
+
+.lg__input::placeholder { color: #9a8b72; }
+
+.lg__input:focus {
+  outline: none;
+  border-color: #a08050;
+  box-shadow: 0 0 0 3px rgba(196, 165, 116, 0.25);
+}
+
+.lg__input:disabled { background-color: #353535; opacity: 0.8; cursor: not-allowed; }
+
+.lg__passwordWrap { position: relative; display: flex; align-items: center; }
+.lg__passwordWrap .lg__input { flex: 1; padding-right: 46px; }
+
+.lg__toggle {
+  position: absolute;
+  right: 10px;
+  background: none;
+  border: none;
+  color: #c4a574;
+  padding: 6px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  transition: color 150ms ease, background 150ms ease;
+}
+.lg__toggle:hover { color: #d4b584; background: rgba(196, 165, 116, 0.08); }
+
+.lg__error {
+  background-color: rgba(180, 80, 80, 0.3);
+  border: 1px solid #a06060;
+  border-radius: 4px;
+  padding: 12px;
+  color: #e8a0a0;
+  font-size: 14px;
+  text-align: center;
+  margin: -8px 0 0 0;
+  animation: riseIn var(--dur-med) var(--ease-out) backwards;
+}
+
+.lg__ok {
+  background-color: rgba(80, 180, 80, 0.2);
+  border: 1px solid #60a060;
+  border-radius: 4px;
+  padding: 12px;
+  color: #a0e8a0;
+  font-size: 14px;
+  text-align: center;
+  margin: -8px 0 0 0;
+}
+
+.lg__options {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lg__stay {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+  color: #c4a574;
+}
+.lg__stay input[type='checkbox'] { cursor: pointer; width: 16px; height: 16px; accent-color: #a08050; }
+
+.lg__link {
+  color: #c4a574;
+  background: none;
+  border: none;
+  padding: 2px;
+  font: inherit;
+  font-weight: 500;
+  transition: color 150ms ease;
+}
+.lg__link:hover { color: #d4b584; text-decoration: underline; }
+
+.lg__submit {
+  padding: 12px 18px;
+  min-height: 48px;
+  background-color: #a08050;
+  color: #f5e6d3;
+  border: none;
+  border-radius: 4px;
+  font-size: 16px;
+  font-weight: 600;
+  margin-top: 8px;
+  transition: background-color 250ms ease, transform 150ms var(--ease-out);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.lg__submit:hover:not(:disabled) { background-color: #b8956b; }
+.lg__submit:active:not(:disabled) { transform: scale(0.985); }
+.lg__submit:disabled { opacity: 0.7; cursor: not-allowed; }
+
+.lg__divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #9d9d9d;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.lg__divider::before, .lg__divider::after { content: ''; height: 1px; background: #4a4a4a; flex: 1; }
+
+.lg__google {
+  min-height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 1px solid #6a6256;
+  border-radius: 4px;
+  background: #3a3a3a;
+  color: #f5e6d3;
+  font: inherit;
+  font-weight: 600;
+}
+.lg__google:hover:not(:disabled) { background: #45413a; border-color: #a08050; }
+.lg__google:disabled { opacity: .7; cursor: not-allowed; }
+.lg__switch { margin: -4px 0 0; text-align: center; color: #c9b99f; font-size: 13px; }
+
+.lg__spinner {
+  width: 17px;
+  height: 17px;
+  border: 2px solid rgba(245, 230, 211, 0.35);
+  border-top-color: #f5e6d3;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.lg__back {
+  text-align: center;
+  color: #c4a574;
+  font-size: 14px;
+  margin-top: 4px;
+  background: none;
+  border: none;
+  font-family: inherit;
+}
+.lg__back:hover { color: #d4b584; text-decoration: underline; }
+
+.lg__footer {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding-top: 16px;
+  border-top: 1px solid #4a4a4a;
+  font-size: 13px;
+}
+
+.lg__footerLink {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #c4a574;
+  font: inherit;
+  font-size: 13px;
+  transition: color 150ms ease;
+}
+.lg__footerLink:hover { color: #d4b584; text-decoration: underline; }
+
+.lg__powered {
+  color: #9d9d9d;
+  font-size: 12px;
+  font-weight: 500;
+  text-align: center;
+  letter-spacing: 0.2px;
+  margin-top: -8px;
+}
+
+/* Kiosk toggle — shown only when this web app is embedded in the Android kiosk WebView */
+.lg__kioskToggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 18px;
+  padding: 12px 16px;
+  border: 1px solid #4a4a4a;
+  border-radius: 12px;
+  background: #202223;
+  color: #c4a574;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
+}
+.lg__kioskToggle:hover {
+  border-color: #8a764d;
+  background: #2a2c2e;
+  color: #d4b584;
+}
+
+/* Policy info modal — V1 styling */
+.lg__modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  background: rgba(0, 0, 0, 0.58);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: fadeIn var(--dur-fast) ease backwards;
+}
+
+.lg__modal {
+  width: min(520px, 100%);
+  max-height: min(680px, 88dvh);
+  overflow: auto;
+  background: #2d2d2d;
+  border: 1px solid #5a5a5a;
+  border-radius: 8px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+  color: #f5e6d3;
+  animation: scaleIn var(--dur-med) var(--ease-out) backwards;
+}
+
+.lg__modalHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 22px;
+  border-bottom: 1px solid #4a4a4a;
+}
+
+.lg__modalHead h2 { margin: 0; color: #c4a574; font-size: 20px; font-family: 'Fraunces', serif; font-weight: 700; }
+
+.lg__modalClose {
+  width: 32px;
+  height: 32px;
+  border: 1px solid #5a5a5a;
+  border-radius: 4px;
+  background: #3a3a3a;
+  color: #c4a574;
+  display: grid;
+  place-items: center;
+  transition: background 150ms ease, color 150ms ease;
+}
+.lg__modalClose:hover { background: #454545; color: #d4b584; }
+
+.lg__modalBody { display: flex; flex-direction: column; gap: 18px; padding: 22px; }
+.lg__modalBody h3 { margin: 0 0 6px 0; color: #d4b584; font-size: 15px; font-family: 'Fraunces', serif; font-weight: 700; }
+.lg__modalBody p { margin: 0; color: #e6d6bd; font-size: 14px; line-height: 1.55; }
+
+@media (max-width: 480px) {
+  .lg__box { padding: 32px 24px; }
+}

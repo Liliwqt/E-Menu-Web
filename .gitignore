@@ -1,0 +1,17 @@
+node_modules
+dist
+.firebase
+*.log
+.DS_Store
+
+# Local coding-agent metadata
+.claude/
+.agents/
+.codex/
+.kilo/
+.kilocode/
+
+# Environment variables (contain secrets — never commit)
+.env
+.env.*
+!.env.example

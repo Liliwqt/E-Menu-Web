@@ -1,0 +1,171 @@
+.ks {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 32px 24px 80px;
+  color: var(--text);
+}
+
+.ks__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.ks__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted, #6b7280);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 6px 0;
+}
+.ks__back:hover { color: var(--text); }
+
+.ks__title {
+  font-size: 28px;
+  font-weight: 700;
+  margin: 0 0 4px;
+  color: var(--text);
+}
+.ks__subtitle {
+  margin: 0;
+  color: var(--text-muted, #6b7280);
+  font-size: 14px;
+  max-width: 720px;
+}
+
+.ks__notice {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 16px 18px;
+  border: 1px solid #f59e0b33;
+  background: #fff7ed;
+  color: #92400e;
+  border-radius: 12px;
+  margin-bottom: 24px;
+}
+.ks__noticeLink {
+  display: inline-block;
+  margin-top: 4px;
+  background: transparent;
+  border: none;
+  color: #b45309;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.ks__summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.ks__summaryCard {
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ks__summaryLabel { font-size: 12px; color: var(--text-muted, #6b7280); text-transform: uppercase; letter-spacing: 0.5px; }
+.ks__summaryValue { font-size: 22px; font-weight: 700; }
+.ks__register { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 20px; padding: 9px 13px; border: 0; border-radius: 8px; background: var(--accent, #4f46e5); color: white; font-weight: 650; cursor: pointer; }
+
+.ks__error {
+  background: #fee2e2;
+  color: #991b1b;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.ks__empty {
+  background: var(--surface, #fff);
+  border: 1px dashed var(--border, #e5e7eb);
+  border-radius: 12px;
+  padding: 32px;
+  text-align: center;
+  color: var(--text-muted, #6b7280);
+}
+.ks__empty h2 { margin: 12px 0 4px; color: var(--text); font-size: 18px; }
+.ks__empty p { margin: 0; }
+
+.ks__items {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ks__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+.ks__item.is-inactive { opacity: 0.7; }
+.ks__itemMain { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.ks__itemIcon {
+  width: 40px; height: 40px;
+  border-radius: 10px;
+  background: var(--accent-soft, #eef2ff);
+  color: var(--accent, #4f46e5);
+  display: grid; place-items: center;
+}
+.ks__itemName { margin: 0 0 2px; font-size: 16px; font-weight: 600; }
+.ks__itemMeta {
+  margin: 0;
+  display: flex; flex-wrap: wrap; gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted, #6b7280);
+}
+.ks__itemMeta code {
+  background: rgba(0,0,0,0.05);
+  padding: 0 4px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+.ks__itemActions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.ks__statusBadge {
+  font-size: 12px; font-weight: 600;
+  padding: 4px 10px; border-radius: 999px;
+}
+.ks__statusBadge.is-on { background: #dcfce7; color: #166534; }
+.ks__statusBadge.is-off { background: #f3f4f6; color: #4b5563; }
+.ks__btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.ks__btn:hover { background: var(--surface-hover, #f9fafb); }
+.ks__btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.ks__btn--danger { color: #b91c1c; border-color: #fca5a5; }
+.ks__btn--danger:hover { background: #fef2f2; }
+.ks__btn--primary { background: var(--accent, #4f46e5); color: white; border-color: transparent; }
+.ks__dialog { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 20px; background: rgba(0, 0, 0, .35); }
+.ks__dialogCard { position: relative; width: min(440px, 100%); padding: 26px; border-radius: 12px; background: var(--surface, #fff); box-shadow: 0 20px 60px rgba(0,0,0,.2); }
+.ks__dialogCard h2 { margin: 0 0 6px; }
+.ks__dialogCard p { margin: 0 0 20px; color: var(--text-muted, #6b7280); }
+.ks__dialogCard form { display: grid; gap: 14px; }
+.ks__dialogCard label { display: grid; gap: 6px; font-size: 13px; font-weight: 650; }
+.ks__dialogCard input { min-height: 42px; padding: 0 10px; border: 1px solid var(--border, #e5e7eb); border-radius: 8px; background: var(--surface-2, #f9fafb); color: inherit; font: inherit; }
+.ks__dialogClose { position: absolute; top: 12px; right: 12px; border: 0; background: transparent; color: var(--text-muted, #6b7280); cursor: pointer; }

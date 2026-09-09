@@ -1,0 +1,171 @@
+/**
+ * Operations Manager — Professional SaaS Design System
+ * Clean, white-based corporate aesthetic inspired by Stripe, Power BI, Shopify Admin.
+ * Brown (#7a5230 / #a08050) is retained as a secondary accent for restaurant branding.
+ *
+ * Light = clean white workspace.  Dark = neutral charcoal.
+ * Fonts: Inter (all UI + headings) · JetBrains Mono (data).
+ */
+
+:root {
+  /* Typography — Inter for everything, no decorative serif */
+  --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
+
+  --text-xs: 0.72rem;
+  --text-sm: 0.8rem;
+  --text-base: 0.9rem;
+  --text-md: 1rem;
+  --text-lg: 1.15rem;
+  --text-xl: 1.45rem;
+  --text-2xl: 1.9rem;
+  --text-3xl: 2.5rem;
+
+  /* Spacing — 4px rhythm */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-7: 32px;
+  --sp-8: 40px;
+  --sp-9: 56px;
+
+  /* Radii — restrained, corporate */
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 10px;
+  --r-xl: 14px;
+  --r-full: 999px;
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --dur-fast: 150ms;
+  --dur-med: 260ms;
+  --dur-slow: 420ms;
+
+  /* Z scale */
+  --z-nav: 100;
+  --z-drawer: 200;
+  --z-modal: 300;
+  --z-toast: 400;
+
+  /* Brand — brown accent, stable across themes */
+  --brand-500: #7a5230;
+  --brand-400: #96703f;
+  --brand-300: #b8956b;
+  --brand-grad: linear-gradient(135deg, #6b4a2b 0%, #96703f 55%, #b8956b 100%);
+  --brand-grad-soft: linear-gradient(135deg, rgba(122, 82, 48, 0.08), rgba(150, 112, 63, 0.05));
+}
+
+/* ── Light theme — clean white workspace ─────────────────────── */
+:root,
+[data-theme='light'] {
+  color-scheme: light;
+
+  --bg: #f8f9fa;
+  --bg-deep: #f1f3f5;
+  --surface: #ffffff;
+  --surface-2: #f8f9fa;
+  --surface-3: #eceef0;
+  --surface-glass: rgba(255, 255, 255, 0.92);
+  --surface-input: #ffffff;
+
+  --text-1: #1a1d21;
+  --text-2: #495057;
+  --text-3: #868e96;
+  --text-invert: #ffffff;
+
+  --border: #dee2e6;
+  --border-strong: #ced4da;
+  --ring: rgba(122, 82, 48, 0.25);
+
+  --primary: #7a5230;
+  --primary-strong: #5f3f24;
+  --primary-soft: rgba(122, 82, 48, 0.09);
+  --on-primary: #ffffff;
+
+  --accent: #96703f;
+  --accent-soft: rgba(150, 112, 63, 0.09);
+
+  --success: #2b8a3e;
+  --success-soft: rgba(43, 138, 62, 0.09);
+  --warning: #e67700;
+  --warning-soft: rgba(230, 119, 0, 0.09);
+  --danger: #c92a2a;
+  --danger-soft: rgba(201, 42, 42, 0.09);
+  --info: #364fc7;
+  --info-soft: rgba(54, 79, 199, 0.09);
+
+  --chart-1: #7a5230;
+  --chart-2: #2b8a3e;
+  --chart-3: #e67700;
+  --chart-4: #364fc7;
+  --chart-5: #862e9c;
+  --chart-grid: #e9ecef;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 2px 8px rgba(0, 0, 0, 0.08), 0 12px 36px rgba(0, 0, 0, 0.1);
+  --shadow-glow: 0 0 0 1px rgba(122, 82, 48, 0.12), 0 4px 16px rgba(0, 0, 0, 0.08);
+
+  --scrim: rgba(0, 0, 0, 0.45);
+  --nav-active-bg: rgba(122, 82, 48, 0.08);
+}
+
+/* ── Dark theme — neutral charcoal ──────────────────────────── */
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg: #18191a;
+  --bg-deep: #121314;
+  --surface: #212529;
+  --surface-2: #2b2f33;
+  --surface-3: #343a40;
+  --surface-glass: rgba(33, 37, 41, 0.92);
+  --surface-input: #2b2f33;
+
+  --text-1: #f1f3f5;
+  --text-2: #ced4da;
+  --text-3: #868e96;
+  --text-invert: #1a1d21;
+
+  --border: #343a40;
+  --border-strong: #495057;
+  --ring: rgba(184, 149, 107, 0.35);
+
+  --primary: #b8956b;
+  --primary-strong: #c9a87e;
+  --primary-soft: rgba(184, 149, 107, 0.12);
+  --on-primary: #1a1d21;
+
+  --accent: #c9a87e;
+  --accent-soft: rgba(201, 168, 126, 0.12);
+
+  --success: #69db7c;
+  --success-soft: rgba(105, 219, 124, 0.12);
+  --warning: #ffc078;
+  --warning-soft: rgba(255, 192, 120, 0.12);
+  --danger: #ff8787;
+  --danger-soft: rgba(255, 135, 135, 0.12);
+  --info: #91a7ff;
+  --info-soft: rgba(145, 167, 255, 0.12);
+
+  --chart-1: #b8956b;
+  --chart-2: #69db7c;
+  --chart-3: #ffc078;
+  --chart-4: #91a7ff;
+  --chart-5: #da77f2;
+  --chart-grid: #2b2f33;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 2px 8px rgba(0, 0, 0, 0.45), 0 12px 36px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 0 1px rgba(184, 149, 107, 0.18), 0 4px 16px rgba(0, 0, 0, 0.3);
+
+  --scrim: rgba(0, 0, 0, 0.6);
+  --nav-active-bg: rgba(184, 149, 107, 0.1);
+}

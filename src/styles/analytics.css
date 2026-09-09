@@ -1,0 +1,94 @@
+/* ── Analytics BI page ───────────────────────────────────────── */
+
+.ana__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-5);
+}
+
+.ana__custom {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.ana__custom .input { min-height: 38px; width: auto; font-size: var(--text-sm); }
+
+.ana__kpis {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-4);
+}
+
+.ana__grid {
+  display: grid;
+  grid-template-columns: 7fr 5fr;
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-4);
+}
+
+/* Allow grid children to shrink so charts never clip */
+.ana__grid > *,
+.ana__kpis > * { min-width: 0; }
+
+.ana__statCards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--sp-3);
+}
+
+.ana__statCard {
+  padding: var(--sp-4);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  display: grid;
+  gap: 4px;
+}
+
+.ana__statLabel { font-size: var(--text-xs); color: var(--text-3); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+.ana__statValue { font-family: var(--font-display); font-size: var(--text-xl); font-weight: 700; }
+
+.ana__aiBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+  padding: var(--sp-5) var(--sp-6);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  margin-bottom: var(--sp-4);
+}
+
+.deep { display: grid; gap: var(--sp-4); }
+.deep__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: var(--sp-3); }
+.deep__card {
+  padding: var(--sp-4);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+.deep__cardTitle { font-size: var(--text-sm); font-weight: 700; color: var(--text-1); display: flex; align-items: center; gap: 7px; }
+.deep__list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.deep__list li { display: flex; gap: 8px; font-size: var(--text-sm); color: var(--text-2); line-height: 1.5; }
+.deep__list li::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--primary); margin-top: 8px; flex-shrink: 0; }
+
+@media (max-width: 1000px) {
+  .ana__kpis { grid-template-columns: 1fr; }
+  .ana__grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 640px) {
+  .ana__custom { flex-direction: column; align-items: stretch; width: 100%; }
+  .ana__custom .input { width: 100%; }
+}

@@ -1,0 +1,18 @@
+# Railway/Railpack dependency manifest.
+#
+# IMPORTANT: this file must list dependencies explicitly and must NEVER contain "." — Railpack
+# installs requirements in a cached layer that contains only the manifest files (pyproject.toml +
+# requirements.txt), so building the package there fails with "egg_base option: 'src' does not
+# exist" / "README.md cannot be found". The app runs from source instead (railway.toml starts
+# uvicorn with --app-dir src), so the package itself is never pip-installed on Railway.
+#
+# Keep this list in sync with [project.dependencies] in pyproject.toml, which remains the source
+# of truth for local development (`pip install -e ".[dev]"`).
+fastapi>=0.115,<1
+firebase-admin>=6.5,<7
+openai>=1.0,<3
+pydantic>=2.8,<3
+pydantic-settings>=2.4,<3
+PyYAML>=6.0,<7
+structlog>=24.4,<26
+uvicorn[standard]>=0.30,<1

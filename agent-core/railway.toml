@@ -1,0 +1,9 @@
+[build]
+builder = "RAILPACK"
+
+[deploy]
+# --app-dir src runs the app from source (no package install on Railway; see requirements.txt
+# for why pip must not build the package inside the dependency-caching layer).
+startCommand = "uvicorn --app-dir src touchorders_core.main:app --host 0.0.0.0 --port $PORT"
+healthcheckPath = "/health"
+healthcheckTimeout = 60

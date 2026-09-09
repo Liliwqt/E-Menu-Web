@@ -1,0 +1,145 @@
+{
+  "rules": {
+    // RULES_VERSION: company-root-v3 (2026-09-05) — two-step onboarding supported.
+    // Verify this marker in Firebase Console > Realtime Database > Rules to confirm
+    // the deployed version matches this file.
+    "users": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid",
+        "email": { ".validate": "newData.isString() && newData.val().length <= 160" },
+        "displayName": { ".validate": "newData.isString() && newData.val().length <= 80" },
+        "photoURL": { ".validate": "newData.isString() && newData.val().length <= 500" },
+        "provider": { ".validate": "newData.isString() && (newData.val() == 'google' || newData.val() == 'password')" },
+        "workspace": {
+          ".validate": "newData.hasChildren(['branchId', 'plan', 'onboardingComplete']) && newData.child('branchId').isString() && newData.child('branchId').val().matches(/^branch-[a-z0-9-]+$/) && (newData.child('plan').val() == 'free' || newData.child('plan').val() == 'subscription') && newData.child('onboardingComplete').isBoolean()"
+        },
+        "kiosks": {
+          "$kioskUid": {
+            ".read": "auth != null && auth.uid == $uid",
+            ".write": "auth != null && auth.uid == $uid",
+            ".validate": "newData.hasChildren(['kioskUid', 'name', 'registeredAt']) && newData.child('kioskUid').val() == $kioskUid && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 60 && newData.child('registeredAt').isNumber()",
+            "kioskUid": { ".validate": "newData.isString() && newData.val() == $kioskUid" },
+            "name": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60" },
+            "registeredAt": { ".validate": "newData.isNumber()" },
+            "lastActiveAt": { ".validate": "newData.isNumber()" },
+            "isActive": { ".validate": "newData.isBoolean()" },
+            "$other": { ".validate": false }
+          }
+        },
+        "role": { ".validate": "newData.isString() && (newData.val() == 'owner' || newData.val() == 'manager' || newData.val() == 'staff')" },
+        "createdAt": { ".validate": "newData.isNumber()" },
+        "updatedAt": { ".validate": "newData.isNumber()" },
+        "$other": { ".validate": false }
+      }
+    },
+    "accounts": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid",
+        ".validate": "newData.hasChildren(['uid', 'companyId', 'activeBranchId']) && newData.child('uid').val() == $uid && newData.child('companyId').isString() && newData.child('companyId').val().matches(/^company-[a-z0-9-]+$/) && newData.child('activeBranchId').isString()"
+      }
+    },
+    // Root kiosk index: a tiny per-device record used ONLY for self-discovery by
+    // unprovisioned kiosks (which cannot read inside a company they don't know yet).
+    // The full enrollment record lives under $companyId/kioskEnrollments/{kioskUid}.
+    "kioskEnrollments": {
+      "$kioskUid": {
+        ".read": "auth != null && auth.uid == $kioskUid",
+        ".write": "auth != null && newData.child('companyId').isString() && newData.child('branchId').isString() && root.child(newData.child('companyId').val()).child('branches').child(newData.child('branchId').val()).child('branchProfile').child('ownerUid').val() == auth.uid",
+        ".validate": "newData.hasChildren(['companyId', 'branchId', 'isActive']) && !newData.hasChild('kioskUid') && newData.child('companyId').val().matches(/^company-[a-z0-9-]+$/) && newData.child('branchId').val().matches(/^branch-[a-z0-9-]+$/) && newData.child('isActive').isBoolean()"
+      }
+    },
+    "$companyId": {
+      ".read": "auth != null && $companyId.matches(/^company-[a-z0-9-]+$/) && (root.child($companyId).child('users').child(auth.uid).exists() || root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true)",
+      ".write": "auth != null && $companyId.matches(/^company-[a-z0-9-]+$/) && (!data.exists() || data.child('companyProfile').child('ownerUids').child(auth.uid).val() == true)",
+      "companyProfile": {
+        ".read": "auth != null && root.child($companyId).child('users').child(auth.uid).exists()",
+        ".write": "auth != null && ((!data.exists() && newData.child('ownerUids').child(auth.uid).val() == true) || root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true)",
+        ".validate": "newData.hasChildren(['companyId', 'companyName', 'ownerUids']) && newData.child('companyId').val() == $companyId && newData.child('companyName').isString() && newData.child('companyName').val().length > 1 && newData.child('ownerUids').child(auth.uid).val() == true"
+      },
+      "kioskEnrollments": {
+        "$kioskUid": {
+          ".read": "auth != null && (auth.uid == $kioskUid || root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || root.child($companyId).child('users').child(auth.uid).exists())",
+          ".write": "auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || root.child($companyId).child('branches').child(newData.child('branchId').val()).child('branchProfile').child('ownerUid').val() == auth.uid)",
+          ".validate": "newData.hasChildren(['kioskUid', 'companyId', 'branchId', 'isActive', 'name', 'registeredAt']) && newData.child('kioskUid').val() == $kioskUid && newData.child('companyId').val() == $companyId && newData.child('branchId').val().matches(/^branch-[a-z0-9-]+$/) && newData.child('isActive').isBoolean() && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 60 && newData.child('registeredAt').isNumber()"
+        }
+      },
+      "users": {
+        "$uid": {
+          ".read": "auth != null && (auth.uid == $uid || root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true)",
+          ".write": "auth != null && (auth.uid == $uid || root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true)",
+          ".validate": "newData.hasChildren(['uid', 'email', 'companyId']) && newData.child('uid').val() == $uid && newData.child('companyId').val() == $companyId"
+        }
+      },
+      "branches": {
+        "$branchId": {
+          ".read": "auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).exists() || root.child($companyId).child('users').child(auth.uid).child('branchIds').child($branchId).val() == true)",
+          ".write": "auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || (newData.hasChild('branchProfile') && newData.child('branchProfile').child('ownerUid').val() == auth.uid && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || !root.child($companyId).child('companyProfile').exists()))) || (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true && !newData.exists())",
+          "branchProfile": {
+            ".read": "auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).exists() || root.child($companyId).child('users').child(auth.uid).child('branchIds').child($branchId).val() == true)",
+            ".write": "auth != null && (root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid || (newData.child('ownerUid').val() == auth.uid && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || !root.child($companyId).child('companyProfile').exists())))",
+            ".validate": "!newData.exists() || (newData.hasChildren(['branchId', 'branchName', 'companyId', 'ownerUid', 'plan']) && newData.child('branchId').val() == $branchId && newData.child('companyId').val() == $companyId && newData.child('ownerUid').isString() && (newData.child('plan').val() == 'free' || newData.child('plan').val() == 'subscription'))"
+          },
+          "users": {
+            "$uid": {
+              ".read": "auth != null && (auth.uid == $uid || root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'owner')",
+              ".write": "auth != null && (auth.uid == $uid || root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid)",
+              ".validate": "newData.hasChildren(['uid', 'role']) && newData.child('uid').val() == $uid && (newData.child('role').val() == 'owner' || newData.child('role').val() == 'manager' || newData.child('role').val() == 'staff')"
+            }
+          },
+          "kiosks": {
+            "$kioskUid": {
+              ".read": "auth != null && (auth.uid == $kioskUid || root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).exists())",
+              ".write": "auth != null && (auth.uid == $kioskUid || root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid)",
+              ".validate": "newData.hasChildren(['kioskUid', 'name', 'isActive']) && newData.child('kioskUid').val() == $kioskUid && newData.child('name').isString() && newData.child('isActive').isBoolean()"
+            }
+          },
+          "categories": {
+            ".read": "auth != null && (root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).exists() || root.child($companyId).child('branches').child($branchId).child('kiosks').child(auth.uid).child('isActive').val() == true)",
+            ".write": "auth != null && root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid"
+          },
+          "inventory": {
+            ".read": "auth != null && (root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).exists() || root.child($companyId).child('branches').child($branchId).child('kiosks').child(auth.uid).child('isActive').val() == true)",
+            ".write": "auth != null && (root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid || root.child($companyId).child('branches').child($branchId).child('kiosks').child(auth.uid).child('isActive').val() == true)"
+          },
+          "appSettings": {
+            ".read": "auth != null && (root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).exists() || root.child($companyId).child('branches').child($branchId).child('kiosks').child(auth.uid).child('isActive').val() == true)",
+            ".write": "auth != null && root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid"
+          },
+          "logs": {
+            "$orderId": {
+              ".read": "auth != null && (root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).exists() || (root.child($companyId).child('branches').child($branchId).child('kiosks').child(auth.uid).child('isActive').val() == true && (!data.exists() || data.child('submittedByUid').val() == auth.uid)))",
+              ".write": "auth != null && !data.exists() && auth.uid == newData.child('submittedByUid').val() && root.child($companyId).child('branches').child($branchId).child('kiosks').child(auth.uid).child('isActive').val() == true",
+              ".validate": "newData.hasChildren(['orderId', 'submittedByUid', 'orderNumber', 'customerName', 'items', 'total', 'paymentMethod', 'paymentStatus', 'timestamp', 'inventoryProcessed', 'inventoryProcessedAt', 'orderSource']) && newData.child('orderId').val() == $orderId && $orderId.matches(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/) && ((newData.child('paymentMethod').val() == 'QR_CODE' && newData.child('paymentStatus').val() == 'CUSTOMER_REPORTED_PAID') || (newData.child('paymentMethod').val() == 'COUNTER' && newData.child('paymentStatus').val() == 'PAY_AT_COUNTER')) && newData.child('inventoryProcessed').val() == true && newData.child('orderSource').val() == 'android_kiosk' && newData.child('submittedByUid').val() == auth.uid && root.child($companyId).child('branches').child($branchId).child('kiosks').child(auth.uid).exists() && root.child($companyId).child('branches').child($branchId).child('kiosks').child(auth.uid).child('isActive').val() == true",
+              "orderId": { ".validate": "newData.isString() && newData.val() == $orderId" },
+              "submittedByUid": { ".validate": "newData.isString() && newData.val() == auth.uid" },
+              "orderNumber": { ".validate": "newData.isString() && newData.val().matches(/^[A-F0-9]{8}$/)" },
+              "customerName": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 80" },
+              "total": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000" },
+              "paymentMethod": { ".validate": "newData.val() == 'QR_CODE' || newData.val() == 'COUNTER'" },
+              "paymentStatus": { ".validate": "newData.val() == 'CUSTOMER_REPORTED_PAID' || newData.val() == 'PAY_AT_COUNTER'" },
+              "timestamp": { ".validate": "newData.isNumber() && newData.val() <= now && newData.val() >= now - 60000" },
+              "inventoryProcessed": { ".validate": "newData.val() == true" },
+              "inventoryProcessedAt": { ".validate": "newData.isNumber() && newData.val() <= now && newData.val() >= now - 60000" },
+              "orderSource": { ".validate": "newData.val() == 'android_kiosk'" },
+              "items": {
+                ".validate": "newData.hasChildren()",
+                "$line": {
+                  ".validate": "$line.matches(/^([0-9]|[1-8][0-9]|9[0-8])$/) && newData.hasChildren(['name','size','quantity','price','subtotal']) && newData.child('subtotal').val() == newData.child('price').val() * newData.child('quantity').val()",
+                  "name": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 120" },
+                  "size": { ".validate": "newData.isString() && newData.val().length <= 40" },
+                  "quantity": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 99" },
+                  "price": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000" },
+                  "subtotal": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+                  "$other": { ".validate": false }
+                }
+              },
+              "$other": { ".validate": false }
+            }
+          }
+        }
+      }
+    }
+  }
+}

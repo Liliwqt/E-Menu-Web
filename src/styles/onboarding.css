@@ -1,0 +1,27 @@
+.onboard { min-height: 100dvh; padding: clamp(20px, 5vw, 64px); display: grid; place-items: center; background: radial-gradient(circle at top left, rgba(185, 137, 73, .2), transparent 42%), var(--bg); }
+.onboard__card { width: min(900px, 100%); padding: clamp(24px, 5vw, 48px); border: 1px solid var(--border); border-radius: var(--r-xl); background: var(--surface); box-shadow: var(--shadow-lg); }
+.onboard__header { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 32px; }
+.onboard__mark { display: grid; place-items: center; flex: 0 0 46px; width: 46px; height: 46px; border-radius: 14px; color: white; background: var(--primary); }
+.onboard h1 { margin: 2px 0 8px; font-family: var(--font-display); font-size: clamp(1.6rem, 4vw, 2.35rem); }
+.onboard__header p { color: var(--text-3); margin: 0; max-width: 680px; line-height: 1.55; }
+.onboard__eyebrow { font-size: var(--text-xs); font-weight: 700; color: var(--primary); letter-spacing: .06em; text-transform: uppercase; }
+.onboard__form { display: grid; gap: 28px; }
+.onboard fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 14px; }
+.onboard legend { padding: 0; font-weight: 750; font-size: var(--text-lg); }
+.onboard label { display: grid; gap: 7px; font-size: var(--text-sm); font-weight: 650; color: var(--text-2); }
+.onboard label span { display: flex; gap: 6px; align-items: center; }
+.onboard input, .onboard select { min-height: 45px; border: 1px solid var(--border); border-radius: var(--r-md); padding: 0 12px; background: var(--surface-2); color: var(--text-1); font: inherit; }
+.onboard__plans { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.onboard__plan { min-height: 210px; padding: 18px; border: 1px solid var(--border); border-radius: var(--r-lg); cursor: pointer; transition: border-color .15s ease, transform .15s ease, box-shadow .15s ease; }
+.onboard__plan:hover { transform: translateY(-2px); box-shadow: var(--shadow-sm); }
+.onboard__plan.is-selected { border: 2px solid var(--primary); background: color-mix(in srgb, var(--primary) 7%, var(--surface)); }
+.onboard__plan input { position: absolute; opacity: 0; pointer-events: none; }
+.onboard__planHead { display: flex; justify-content: space-between; color: var(--text-1); font-size: var(--text-lg); }
+.onboard__planHead span { color: var(--primary); font-size: var(--text-sm); font-weight: 750; }
+.onboard__plan p { min-height: 40px; margin: 10px 0; color: var(--text-3); font-size: var(--text-sm); }
+.onboard__plan ul { display: grid; gap: 7px; padding: 0; margin: 0; list-style: none; color: var(--text-2); font-size: var(--text-sm); }
+.onboard__plan li, .onboard__plan small { display: flex; gap: 7px; align-items: center; }
+.onboard__plan small { margin-top: 12px; color: var(--primary); font-weight: 650; }
+.onboard__error { padding: 12px; border: 1px solid var(--danger); border-radius: var(--r-md); color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, transparent); }
+.onboard__actions { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+@media (max-width: 620px) { .onboard__plans { grid-template-columns: 1fr; } .onboard__card { padding: 24px; } }

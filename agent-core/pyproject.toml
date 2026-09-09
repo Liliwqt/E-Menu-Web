@@ -1,0 +1,69 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "touchorders-agent-core"
+version = "0.1.0"
+description = "Deterministic, auditable agent core for TouchOrders restaurant operations."
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+  "fastapi>=0.115,<1",
+  "firebase-admin>=6.5,<7",
+  "openai>=1.0,<3",
+  "pydantic>=2.8,<3",
+  "pydantic-settings>=2.4,<3",
+  "PyYAML>=6.0,<7",
+  "structlog>=24.4,<26",
+  "uvicorn[standard]>=0.30,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "httpx>=0.27,<1",
+  "import-linter>=2.0,<3",
+  "pytest>=8.0,<9",
+]
+
+[project.scripts]
+touchorders-agent-core = "touchorders_core.main:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["tests"]
+
+[tool.importlinter]
+root_packages = ["touchorders_core"]
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Domain stays pure"
+type = "forbidden"
+source_modules = ["touchorders_core.domain"]
+forbidden_modules = [
+  "touchorders_core.llm",
+  "touchorders_core.api",
+  "touchorders_core.observability",
+]
+
+[[tool.importlinter.contracts]]
+name = "LLM subsystem is isolated from the API layer"
+type = "forbidden"
+source_modules = ["touchorders_core.llm"]
+forbidden_modules = ["touchorders_core.api"]
+
+[[tool.importlinter.contracts]]
+name = "API cannot bypass the LLM gateway"
+type = "forbidden"
+source_modules = ["touchorders_core.api"]
+forbidden_modules = ["openai"]
+# DIRECT-import boundary: the API reaches openai only *through* the LLM gateway. The
+# single-openai-chokepoint (P4) is separately enforced by the AST guard test.
+allow_indirect_imports = "true"
