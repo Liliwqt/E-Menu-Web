@@ -3,7 +3,9 @@ import { ReceiptText, Trash2, Search, RotateCcw, Clock3 } from 'lucide-react';
 import AppShell from '../components/layout/AppShell';
 import Modal from '../components/ui/Modal';
 import { useBranchData } from '../context/BranchDataContext';
+import { useAuth } from '../context/AuthContext';
 import { deleteLogToBin, clearDeletedLogs } from '../lib/menuApi';
+import { CAP } from '../lib/permissions';
 import { formatCurrency } from '../lib/statisticsUtils';
 import '../styles/orders.css';
 
@@ -37,7 +39,7 @@ function statusPillClass(status) {
   return 'pill--success';
 }
 
-function OrderDetail({ log, onClose, onDelete }) {
+function OrderDetail({ log, onClose, onDelete, canTrash }) {
   const items = getItems(log);
   return (
     <Modal
@@ -47,7 +49,7 @@ function OrderDetail({ log, onClose, onDelete }) {
       subtitle={formatWhen(log.timestamp || log.createdAt)}
       footer={
         <>
-          {log.orderSource !== 'android_kiosk' && (
+          {canTrash && log.orderSource !== 'android_kiosk' && (
             <button className="btn btn--danger" onClick={() => { onDelete(log); onClose(); }}>
               <Trash2 size={15} /> Move to trash
             </button>
@@ -91,6 +93,11 @@ function OrderDetail({ log, onClose, onDelete }) {
 
 export default function OrdersPage() {
   const { branchId, logs, logsLoaded, deletedLogs } = useBranchData();
+  const { can } = useAuth();
+  // Trashing is reversible (the order moves to the bin), so managers may do it.
+  // Emptying the bin destroys the records outright, which stays with the owner.
+  const canTrash = can(CAP.TRASH_ORDER);
+  const canEmptyTrash = can(CAP.EMPTY_TRASH);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
   const [trashOpen, setTrashOpen] = useState(false);
@@ -186,16 +193,16 @@ export default function OrdersPage() {
         </div>
       )}
 
-      {selected && <OrderDetail log={selected} onClose={() => setSelected(null)} onDelete={handleDelete} />}
+      {selected && <OrderDetail log={selected} onClose={() => setSelected(null)} onDelete={handleDelete} canTrash={canTrash} />}
 
       <Modal
         open={trashOpen}
         onClose={() => setTrashOpen(false)}
         title="Trash bin"
-        subtitle={`${deletedLogs.length} deleted order${deletedLogs.length === 1 ? '' : 's'} — still counted in analytics unless excluded in the Order Ledger`}
+        subtitle={`${deletedLogs.length} deleted order${deletedLogs.length === 1 ? '' : 's'} — still counted in analytics unless excluded in Order History`}
         size="lg"
         footer={
-          deletedLogs.length > 0 && (
+          deletedLogs.length > 0 && canEmptyTrash && (
             <button className="btn btn--danger" onClick={handleClearTrash} disabled={clearing}>
               {clearing ? 'Clearing…' : 'Empty trash permanently'}
             </button>

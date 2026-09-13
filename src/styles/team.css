@@ -1,0 +1,322 @@
+.team {
+  display: grid;
+  gap: var(--sp-5);
+  max-width: 920px;
+}
+
+.team__header { display: grid; gap: var(--sp-3); }
+
+.team__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+.team__back:hover { color: var(--primary); }
+
+.team__heading { display: grid; gap: 4px; }
+
+.team__title {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  margin: 0;
+}
+
+.team__subtitle {
+  margin: 0;
+  color: var(--text-3);
+  font-size: var(--text-sm);
+  max-width: 62ch;
+  line-height: 1.55;
+}
+
+.team__you {
+  justify-self: start;
+  margin-top: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  color: var(--text-2);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.team__notice,
+.team__error {
+  padding: 10px 14px;
+  border-radius: var(--r-md);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.team__notice {
+  background: var(--success-soft, rgba(16, 185, 129, 0.12));
+  color: var(--text-1);
+  border: 1px solid var(--border);
+}
+
+.team__error {
+  background: var(--danger-soft);
+  color: var(--danger);
+  border: 1px solid var(--danger);
+}
+
+/* ── Role explainer cards ── */
+.team__roles {
+  display: grid;
+  gap: var(--sp-3);
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.team__roleCard {
+  padding: var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  display: grid;
+  gap: 6px;
+}
+
+.team__roleHead {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--primary);
+}
+.team__roleHead h2 {
+  font-size: var(--text-sm);
+  font-weight: 750;
+  margin: 0;
+  color: var(--text-1);
+}
+
+.team__roleBlurb {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-2);
+  line-height: 1.55;
+}
+
+.team__roleLimit {
+  margin: 0;
+  font-size: 0.76rem;
+  color: var(--text-3);
+  line-height: 1.5;
+}
+
+/* ── Member panel ── */
+.team__panel {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.team__panelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  padding: var(--sp-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.team__panelTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-2);
+}
+.team__panelTitle h2 {
+  font-size: var(--text-sm);
+  font-weight: 750;
+  margin: 0;
+  color: var(--text-1);
+}
+
+.team__count {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-3);
+}
+
+.team__empty {
+  margin: 0;
+  padding: var(--sp-5) var(--sp-4);
+  color: var(--text-3);
+  font-size: var(--text-sm);
+}
+
+.team__list { list-style: none; margin: 0; padding: 0; }
+
+.team__row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 12px var(--sp-4);
+  border-top: 1px solid var(--border);
+}
+.team__row:first-child { border-top: none; }
+
+.team__badge {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+.team__badge--owner {
+  background: var(--primary-soft, rgba(99, 102, 241, 0.15));
+  color: var(--primary);
+}
+.team__badge--manager {
+  background: var(--warning-soft, rgba(245, 158, 11, 0.15));
+  color: var(--warning, #b45309);
+}
+.team__badge--staff {
+  background: var(--surface-3);
+  color: var(--text-2);
+}
+
+.team__who { display: grid; gap: 1px; min-width: 0; flex: 1; }
+
+.team__email {
+  font-size: var(--text-sm);
+  font-weight: 650;
+  color: var(--text-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.team__meta {
+  font-size: 0.72rem;
+  color: var(--text-3);
+}
+
+.team__remove { color: var(--text-3); }
+.team__remove:hover { color: var(--danger); }
+
+.team__footnote {
+  margin: 0;
+  padding: var(--sp-3) var(--sp-4);
+  border-top: 1px solid var(--border);
+  font-size: 0.76rem;
+  color: var(--text-3);
+  line-height: 1.5;
+}
+
+/* ── Add / confirm dialog ── */
+.team__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal, 200);
+  display: grid;
+  place-items: center;
+  padding: var(--sp-5);
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.team__dialog {
+  width: 100%;
+  max-width: 460px;
+  max-height: 90dvh;
+  overflow-y: auto;
+  display: grid;
+  gap: var(--sp-4);
+  padding: var(--sp-5);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+}
+.team__dialog--sm { max-width: 400px; }
+
+.team__dialogHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+.team__dialogHead h2 {
+  font-size: var(--text-lg);
+  margin: 0;
+}
+
+.team__field { display: grid; gap: 6px; }
+
+.team__label {
+  font-size: 0.74rem;
+  font-weight: 750;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.team__hint {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--text-3);
+  line-height: 1.5;
+}
+
+.team__segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 4px;
+  border-radius: var(--r-md);
+  background: var(--surface-3);
+}
+
+.team__segment {
+  padding: 8px 10px;
+  border: none;
+  border-radius: calc(var(--r-md) - 3px);
+  background: transparent;
+  color: var(--text-2);
+  font-size: 0.8rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+.team__segment.is-active {
+  background: var(--surface);
+  color: var(--text-1);
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.08));
+}
+
+.team__confirmText {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-2);
+  line-height: 1.6;
+}
+
+.team__dialogFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+  .team__panelHead { padding: var(--sp-3); }
+  .team__row { padding: 11px var(--sp-3); }
+  .team__dialog { max-height: 92dvh; }
+}

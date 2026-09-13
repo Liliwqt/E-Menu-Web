@@ -1,8 +1,8 @@
-import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { initializeApp, deleteApp, getApps } from 'firebase/app';
+import { getAuth, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { getDatabase } from 'firebase/database';
 
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
   databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL,
@@ -69,4 +69,33 @@ export function dbUrl(path) {
   const clean = path.startsWith('/') ? path.slice(1) : path;
   const encoded = clean.split('/').map(seg => encodeURIComponent(seg)).join('/');
   return `${databaseURL}/${encoded}.json`;
+}
+
+const PROVISIONER_APP_NAME = 'account-provisioner';
+
+/**
+ * Creates a Firebase Auth user without disturbing the signed-in session.
+ *
+ * createUserWithEmailAndPassword always signs the calling client in as the new
+ * user, which would log the owner out mid-flow. Running it on a second app
+ * instance bound to the same config leaves the primary auth untouched — that
+ * client never observes a state change.
+ *
+ * Returns the new uid. Creating the auth user grants no data access on its own;
+ * the caller must write the matching database records.
+ */
+export async function provisionAuthAccount(email, password) {
+  const stale = getApps().find((app) => app.name === PROVISIONER_APP_NAME);
+  if (stale) await deleteApp(stale);
+
+  const secondary = initializeApp(firebaseConfig, PROVISIONER_APP_NAME);
+  try {
+    const secondaryAuth = getAuth(secondary);
+    const credential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+    const { uid } = credential.user;
+    await signOut(secondaryAuth);
+    return uid;
+  } finally {
+    await deleteApp(secondary);
+  }
 }

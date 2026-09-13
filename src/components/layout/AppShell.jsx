@@ -1,9 +1,9 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, TrendingUp, Boxes, ReceiptText, UtensilsCrossed,
   FileBarChart, History, Sun, Moon, LogOut, Sparkles, Settings2, Coffee, HelpCircle,
-  Monitor, CreditCard,
+  Monitor, CreditCard, MoreHorizontal, X, Users,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -11,8 +11,8 @@ import { useBranchData } from '../../context/BranchDataContext';
 import { useLiveAnalyst } from '../../context/LiveAnalystProvider';
 import { AUTH_CONFIG, isUserAdmin } from '../../config/authConfig';
 import { isAiEnabled } from '../../lib/workspaceApi';
-import { isSubscriptionActive } from '../../lib/planFeatures';
 import { isEmbeddedInKiosk, enterKioskMode, getDeviceUid } from '../../lib/kioskBridge';
+import { CAP, roleLabel } from '../../lib/permissions';
 import SettingsModal from './SettingsModal';
 import KioskRegisterDialog from './KioskRegisterDialog';
 import AINotificationPanel from '../ai/AINotificationPanel';
@@ -23,17 +23,27 @@ const AIAnalystDrawer = lazy(() => import('../ai/AIAnalystDrawer'));
 
 const NAV = [
   { key: 'home', label: 'Dashboard', icon: LayoutDashboard, path: (b) => `/home/${b}` },
-  { key: 'analytics', label: 'Analytics', icon: TrendingUp, path: (b) => `/analytics/${b}` },
-  { key: 'inventory', label: 'Inventory', icon: Boxes, path: (b) => `/inventory/${b}` },
   { key: 'orders', label: 'Orders', icon: ReceiptText, path: (b) => `/orders/${b}` },
-  { key: 'menu', label: 'Menu', icon: UtensilsCrossed, path: (b) => `/menu/${b}` },
+  { key: 'menu', label: 'Menu', icon: UtensilsCrossed, path: (b) => `/menu/${b}`, cap: CAP.MANAGE_MENU },
+  { key: 'inventory', label: 'Inventory', icon: Boxes, path: (b) => `/inventory/${b}` },
 ];
 
-const NAV_SECONDARY = [
-  { key: 'reports', label: 'Reports', icon: FileBarChart, path: (b) => `/reports/${b}` },
-  { key: 'history', label: 'Order Ledger', icon: History, path: (b) => `/analytics-history/${b}` },
-  { key: 'kiosks', label: 'Kiosks', icon: Monitor, path: (b) => `/kiosks/${b}` },
-  { key: 'subscription', label: 'Subscription', icon: CreditCard, path: (b) => `/subscription/${b}` },
+const NAV_INSIGHTS = [
+  { key: 'analytics', label: 'Analytics', icon: TrendingUp, path: (b) => `/analytics/${b}`, cap: CAP.VIEW_ANALYTICS },
+  { key: 'reports', label: 'Reports', icon: FileBarChart, path: (b) => `/reports/${b}`, cap: CAP.EXPORT_REPORTS },
+  { key: 'history', label: 'Order History', icon: History, path: (b) => `/analytics-history/${b}`, cap: CAP.CORRECT_ANALYTICS },
+];
+
+const NAV_SETTINGS = [
+  { key: 'team', label: 'Team', icon: Users, path: (b) => `/team/${b}`, cap: CAP.MANAGE_STAFF },
+  { key: 'kiosks', label: 'Kiosks', icon: Monitor, path: (b) => `/kiosks/${b}`, cap: CAP.MANAGE_KIOSKS },
+  { key: 'subscription', label: 'Subscription', icon: CreditCard, path: (b) => `/subscription/${b}`, cap: CAP.MANAGE_BILLING },
+];
+
+// Bottom bar shows the four daily tools plus a "More" entry that opens the rest.
+const NAV_MOBILE = [
+  ...NAV,
+  { key: 'more', label: 'More', icon: MoreHorizontal, path: null },
 ];
 
 function activeKeyFor(pathname) {
@@ -44,6 +54,7 @@ function activeKeyFor(pathname) {
   if (pathname.includes('/menu/')) return 'menu';
   if (pathname.includes('/reports/')) return 'reports';
   if (pathname.includes('/kiosks/')) return 'kiosks';
+  if (pathname.includes('/team/')) return 'team';
   if (pathname.includes('/subscription/')) return 'subscription';
   return 'home';
 }
@@ -51,7 +62,7 @@ function activeKeyFor(pathname) {
 export default function AppShell({ children, title }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, nickname, workspace, logout } = useAuth();
+  const { user, nickname, workspace, logout, role, can } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { branchId, aiAnalyticsData, hasOrders } = useBranchData();
   const { setBranchData } = useLiveAnalyst();
@@ -61,8 +72,8 @@ export default function AppShell({ children, title }) {
   const [helpOpen, setHelpOpen] = useState(false);
   const [kioskDialogOpen, setKioskDialogOpen] = useState(false);
   const [deviceUid, setDeviceUid] = useState('');
+  const [moreOpen, setMoreOpen] = useState(false);
   const aiEnabled = isAiEnabled(workspace) || isUserAdmin(user?.email);
-  const subscriptionActive = isSubscriptionActive(workspace);
 
   // Feed branch data to the LiveAnalystProvider (which sits above the router)
   // so it can generate AI analyses with current branch analytics.
@@ -91,8 +102,16 @@ export default function AppShell({ children, title }) {
   const admin = isUserAdmin(user?.email);
   const embeddedInKiosk = isEmbeddedInKiosk();
 
+  // Navigation is filtered by capability, so a staff account never sees a door
+  // it cannot open. The rules enforce the same matrix server-side.
+  const allowed = useCallback((item) => !item.cap || can(item.cap), [can]);
+  const navPrimary = useMemo(() => NAV.filter(allowed), [allowed]);
+  const navInsights = useMemo(() => NAV_INSIGHTS.filter(allowed), [allowed]);
+  const navSettings = useMemo(() => NAV_SETTINGS.filter(allowed), [allowed]);
+  const navMobile = useMemo(() => NAV_MOBILE.filter(allowed), [allowed]);
+
   const pageTitle = useMemo(() => {
-    const all = [...NAV, ...NAV_SECONDARY];
+    const all = [...NAV, ...NAV_INSIGHTS, ...NAV_SETTINGS];
     return title || all.find((n) => n.key === activeKey)?.label || 'Dashboard';
   }, [title, activeKey]);
 
@@ -130,8 +149,8 @@ export default function AppShell({ children, title }) {
         <BranchSwitcher branchId={branchId} />
 
         <nav className="shell__nav" aria-label="Primary">
-          <div className="shell__navLabel">Daily Operations</div>
-          {NAV.map((item) => (
+          <div className="shell__navLabel">Overview</div>
+          {navPrimary.map((item) => (
             <button
               key={item.key}
               className={`shell__navItem ${activeKey === item.key ? 'is-active' : ''}`}
@@ -142,18 +161,38 @@ export default function AppShell({ children, title }) {
               {item.label}
             </button>
           ))}
-          <div className="shell__navLabel">Business Intelligence</div>
-          {NAV_SECONDARY.map((item) => (
-            <button
-              key={item.key}
-              className={`shell__navItem ${activeKey === item.key ? 'is-active' : ''}`}
-              onClick={() => go(item)}
-              aria-current={activeKey === item.key ? 'page' : undefined}
-            >
-              <item.icon size={18} strokeWidth={activeKey === item.key ? 2.4 : 2} />
-              {item.label}
-            </button>
-          ))}
+          {navInsights.length > 0 && (
+            <>
+              <div className="shell__navLabel">Insights</div>
+              {navInsights.map((item) => (
+                <button
+                  key={item.key}
+                  className={`shell__navItem ${activeKey === item.key ? 'is-active' : ''}`}
+                  onClick={() => go(item)}
+                  aria-current={activeKey === item.key ? 'page' : undefined}
+                >
+                  <item.icon size={18} strokeWidth={activeKey === item.key ? 2.4 : 2} />
+                  {item.label}
+                </button>
+              ))}
+            </>
+          )}
+          {navSettings.length > 0 && (
+            <>
+              <div className="shell__navLabel">Settings</div>
+              {navSettings.map((item) => (
+                <button
+                  key={item.key}
+                  className={`shell__navItem ${activeKey === item.key ? 'is-active' : ''}`}
+                  onClick={() => go(item)}
+                  aria-current={activeKey === item.key ? 'page' : undefined}
+                >
+                  <item.icon size={18} strokeWidth={activeKey === item.key ? 2.4 : 2} />
+                  {item.label}
+                </button>
+              ))}
+            </>
+          )}
           {aiEnabled && (
             <button className="shell__navItem" onClick={() => setAiOpen(true)}>
               <Sparkles size={18} />
@@ -178,7 +217,7 @@ export default function AppShell({ children, title }) {
             <div style={{ minWidth: 0, flex: 1 }}>
               <div className="shell__userName">{displayName}</div>
               <div className="shell__userRole">
-                {admin ? 'Administrator' : subscriptionActive ? 'Subscription manager' : 'Free plan manager'}
+                {admin ? 'Administrator' : roleLabel(role)}
               </div>
             </div>
             <Settings2 size={16} style={{ color: 'var(--text-3)', flexShrink: 0 }} />
@@ -277,11 +316,11 @@ export default function AppShell({ children, title }) {
 
       {/* ── Mobile bottom nav ── */}
       <nav className="shell__bottomNav" aria-label="Primary">
-        {NAV.map((item) => (
+        {navMobile.map((item) => (
           <button
             key={item.key}
             className={`shell__bottomItem ${activeKey === item.key ? 'is-active' : ''}`}
-            onClick={() => go(item)}
+            onClick={() => (item.path ? go(item) : setMoreOpen(true))}
             aria-current={activeKey === item.key ? 'page' : undefined}
           >
             <item.icon size={19} strokeWidth={activeKey === item.key ? 2.4 : 2} />
@@ -289,6 +328,58 @@ export default function AppShell({ children, title }) {
           </button>
         ))}
       </nav>
+
+      {moreOpen && (
+        <div
+          className="shell__moreSheet"
+          onClick={(e) => { if (e.target === e.currentTarget) setMoreOpen(false); }}
+        >
+          <div className="shell__morePanel" role="dialog" aria-label="More navigation">
+            <div className="shell__moreHeader">
+              <h3 style={{ fontSize: 'var(--text-lg)' }}>More</h3>
+              <button className="btn btn--ghost btn--icon btn--sm" onClick={() => setMoreOpen(false)} aria-label="Close menu">
+                <X size={18} />
+              </button>
+            </div>
+            {navInsights.length > 0 && (
+              <>
+                <div className="shell__navLabel">Insights</div>
+                {navInsights.map((item) => (
+                  <button
+                    key={item.key}
+                    className={`shell__navItem ${activeKey === item.key ? 'is-active' : ''}`}
+                    onClick={() => { go(item); setMoreOpen(false); }}
+                  >
+                    <item.icon size={18} />
+                    {item.label}
+                  </button>
+                ))}
+              </>
+            )}
+            {navSettings.length > 0 && (
+              <>
+                <div className="shell__navLabel">Settings</div>
+                {navSettings.map((item) => (
+                  <button
+                    key={item.key}
+                    className={`shell__navItem ${activeKey === item.key ? 'is-active' : ''}`}
+                    onClick={() => { go(item); setMoreOpen(false); }}
+                  >
+                    <item.icon size={18} />
+                    {item.label}
+                  </button>
+                ))}
+              </>
+            )}
+            {aiEnabled && (
+              <button className="shell__navItem" onClick={() => { setMoreOpen(false); setAiOpen(true); }}>
+                <Sparkles size={18} />
+                AI Analyst
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {aiEnabled && aiOpen && (
         <Suspense fallback={null}>

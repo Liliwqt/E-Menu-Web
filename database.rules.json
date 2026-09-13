@@ -36,8 +36,15 @@
     "accounts": {
       "$uid": {
         ".read": "auth != null && auth.uid == $uid",
-        ".write": "auth != null && auth.uid == $uid",
-        ".validate": "newData.hasChildren(['uid', 'companyId', 'activeBranchId']) && newData.child('uid').val() == $uid && newData.child('companyId').isString() && newData.child('companyId').val().matches(/^company-[a-z0-9-]+$/) && newData.child('activeBranchId').isString()"
+        // Normally a user owns this record. It is the one place a company owner
+        // (and, for staff only, a branch manager) may write on someone else's
+        // behalf so a provisioned account can resolve its company on first login.
+        // Value is derived from newData, so it cannot be used to reach a company
+        // the writer has no standing in.
+        ".write": "auth != null && (auth.uid == $uid || root.child(newData.child('companyId').val()).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || (newData.child('role').val() == 'staff' && root.child(newData.child('companyId').val()).child('users').child(auth.uid).child('companyRole').val() == 'manager'))",
+        // `role` is optional so records written before the role model existed still
+        // validate on their next update. When present it must be a known role.
+        ".validate": "newData.hasChildren(['uid', 'companyId', 'activeBranchId']) && newData.child('uid').val() == $uid && newData.child('companyId').isString() && newData.child('companyId').val().matches(/^company-[a-z0-9-]+$/) && newData.child('activeBranchId').isString() && (!newData.hasChild('role') || newData.child('role').val() == 'owner' || newData.child('role').val() == 'manager' || newData.child('role').val() == 'staff')"
       }
     },
     // Root kiosk index: a tiny per-device record used ONLY for self-discovery by
@@ -68,7 +75,10 @@
       "users": {
         "$uid": {
           ".read": "auth != null && (auth.uid == $uid || root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true)",
-          ".write": "auth != null && (auth.uid == $uid || root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true)",
+          // The owner may write any member's profile. A branch manager may write a
+          // profile only when it is tagged as staff, which keeps managers from
+          // creating peers or owners.
+          ".write": "auth != null && (auth.uid == $uid || root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || (newData.child('companyRole').val() == 'staff' && root.child($companyId).child('users').child(auth.uid).child('companyRole').val() == 'manager'))",
           ".validate": "newData.hasChildren(['uid', 'email', 'companyId']) && newData.child('uid').val() == $uid && newData.child('companyId').val() == $companyId"
         }
       },
@@ -82,9 +92,15 @@
             ".validate": "!newData.exists() || (newData.hasChildren(['branchId', 'branchName', 'companyId', 'ownerUid', 'plan']) && newData.child('branchId').val() == $branchId && newData.child('companyId').val() == $companyId && newData.child('ownerUid').isString() && (newData.child('plan').val() == 'free' || newData.child('plan').val() == 'subscription'))"
           },
           "users": {
+            // Listing a branch's members is a management view: the company owner
+            // and that branch's manager. Staff can still read their own row below.
+            ".read": "auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'manager')",
             "$uid": {
-              ".read": "auth != null && (auth.uid == $uid || root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'owner')",
-              ".write": "auth != null && (auth.uid == $uid || root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid)",
+              ".read": "auth != null && (auth.uid == $uid || root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'owner' || root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'manager')",
+              // The owner may assign any role. A branch's manager may add staff to
+              // that branch only — never another manager, and never to a branch
+              // they do not manage.
+              ".write": "auth != null && (auth.uid == $uid || root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || (newData.child('role').val() == 'staff' && root.child($companyId).child('branches').child($branchId).child('branchProfile').child('managerUid').val() == auth.uid))",
               ".validate": "newData.hasChildren(['uid', 'role']) && newData.child('uid').val() == $uid && (newData.child('role').val() == 'owner' || newData.child('role').val() == 'manager' || newData.child('role').val() == 'staff')"
             }
           },
@@ -97,15 +113,21 @@
           },
           "categories": {
             ".read": "auth != null && (root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).exists() || root.child($companyId).child('branches').child($branchId).child('kiosks').child(auth.uid).child('isActive').val() == true)",
-            ".write": "auth != null && root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid"
+            // Menu edits (including category delete, which takes every item with
+            // it) are manager-and-above. Staff cannot reach this node.
+            ".write": "auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid || root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'manager')"
           },
           "inventory": {
             ".read": "auth != null && (root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).exists() || root.child($companyId).child('branches').child($branchId).child('kiosks').child(auth.uid).child('isActive').val() == true)",
-            ".write": "auth != null && (root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid || root.child($companyId).child('branches').child($branchId).child('kiosks').child(auth.uid).child('isActive').val() == true)"
+            // Staff restock during service, so any branch member may write stock.
+            // The finer split (thresholds/unit are manager-only) is enforced in the
+            // UI because Realtime Database rules cannot scope to a single field
+            // without also blocking the sibling stock writes.
+            ".write": "auth != null && (root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).exists() || root.child($companyId).child('branches').child($branchId).child('kiosks').child(auth.uid).child('isActive').val() == true)"
           },
           "appSettings": {
             ".read": "auth != null && (root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).exists() || root.child($companyId).child('branches').child($branchId).child('kiosks').child(auth.uid).child('isActive').val() == true)",
-            ".write": "auth != null && root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid"
+            ".write": "auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid || root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'manager')"
           },
           "logs": {
             "$orderId": {

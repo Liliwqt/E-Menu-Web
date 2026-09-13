@@ -6,11 +6,13 @@ import {
 import AppShell from '../components/layout/AppShell';
 import Modal from '../components/ui/Modal';
 import { useBranchData } from '../context/BranchDataContext';
+import { useAuth } from '../context/AuthContext';
 import {
   onCategoriesChange, addCategory, removeCategory, renameCategory,
   addItemToFirebase, updateItem, deleteItem, setBestSeller,
   compressImage, updateImageInFirebase, onMenuLogsChange,
 } from '../lib/menuApi';
+import { CAP } from '../lib/permissions';
 import { formatCurrency } from '../lib/statisticsUtils';
 import '../styles/menu.css';
 
@@ -229,6 +231,12 @@ function ItemModal({ mode, branchId, category, itemKey, item, categories, onClos
 
 export default function MenuPage() {
   const { branchId } = useBranchData();
+  const { can } = useAuth();
+  // Menu structure is manager-and-above. Staff still reach this page to flip
+  // availability, which is the one menu action their role allows.
+  const canEditMenu = can(CAP.MANAGE_ITEMS);
+  const canDelete = can(CAP.DELETE_MENU_ITEM);
+  const canManageCategories = can(CAP.MANAGE_MENU);
   const [categories, setCategories] = useState([]);
   const [itemsByCategory, setItemsByCategory] = useState({});
   const [loaded, setLoaded] = useState(false);
@@ -282,7 +290,7 @@ export default function MenuPage() {
           <button className="btn btn--secondary btn--sm" onClick={() => setLogsOpen(true)}>
             <ScrollText size={14} /> Change log
           </button>
-          <button className="btn btn--primary btn--sm" onClick={() => setModal({ mode: 'add' })} disabled={categories.length === 0}>
+          <button className="btn btn--primary btn--sm" onClick={() => setModal({ mode: 'add' })} disabled={categories.length === 0 || !canEditMenu} hidden={!canEditMenu}>
             <Plus size={14} /> Add item
           </button>
         </div>
@@ -291,28 +299,30 @@ export default function MenuPage() {
       {error && <div className="login__error" role="alert" style={{ marginBottom: 'var(--sp-4)' }}>{error}</div>}
 
       {/* Add category */}
-      <div className="menu__addCat card card--pad rise-1" style={{ marginBottom: 'var(--sp-6)', padding: 'var(--sp-4) var(--sp-5)' }}>
-        <FolderPlus size={17} style={{ color: 'var(--primary)' }} />
-        <input
-          className="input"
-          style={{ flex: 1, minWidth: 180 }}
-          value={newCategory}
-          onChange={(e) => setNewCategory(e.target.value)}
-          placeholder="New category name (e.g. Iced Drinks)"
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && newCategory.trim()) {
-              run('addcat', async () => { await addCategory(branchId, newCategory); setNewCategory(''); });
-            }
-          }}
-        />
-        <button
-          className="btn btn--secondary"
-          disabled={!newCategory.trim() || busy === 'addcat'}
-          onClick={() => run('addcat', async () => { await addCategory(branchId, newCategory); setNewCategory(''); })}
-        >
-          Add category
-        </button>
-      </div>
+      {canManageCategories && (
+        <div className="menu__addCat card card--pad rise-1" style={{ marginBottom: 'var(--sp-6)', padding: 'var(--sp-4) var(--sp-5)' }}>
+          <FolderPlus size={17} style={{ color: 'var(--primary)' }} />
+          <input
+            className="input"
+            style={{ flex: 1, minWidth: 180 }}
+            value={newCategory}
+            onChange={(e) => setNewCategory(e.target.value)}
+            placeholder="New category name (e.g. Iced Drinks)"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && newCategory.trim()) {
+                run('addcat', async () => { await addCategory(branchId, newCategory); setNewCategory(''); });
+              }
+            }}
+          />
+          <button
+            className="btn btn--secondary"
+            disabled={!newCategory.trim() || busy === 'addcat'}
+            onClick={() => run('addcat', async () => { await addCategory(branchId, newCategory); setNewCategory(''); })}
+          >
+            Add category
+          </button>
+        </div>
+      )}
 
       {!loaded ? (
         <div className="menu__grid">
@@ -341,20 +351,22 @@ export default function MenuPage() {
                   <h2 style={{ fontSize: 'var(--text-lg)' }}>{cat}</h2>
                   <span className="pill pill--neutral num">{Object.keys(items).length}</span>
                 </button>
-                <div className="flex gap-2">
-                  <button
-                    className="btn btn--ghost btn--sm"
-                    onClick={() => {
-                      const next = prompt(`Rename category "${cat}" to:`, cat);
-                      if (next && next !== cat) run('rencat', () => renameCategory(branchId, cat, next));
-                    }}
-                  >
-                    <Pencil size={13} /> Rename
-                  </button>
-                  <button className="btn btn--ghost btn--sm" style={{ color: 'var(--danger)' }} onClick={() => setConfirmDelete({ category: cat })}>
-                    <Trash2 size={13} /> Delete
-                  </button>
-                </div>
+                {canManageCategories && (
+                  <div className="flex gap-2">
+                    <button
+                      className="btn btn--ghost btn--sm"
+                      onClick={() => {
+                        const next = prompt(`Rename category "${cat}" to:`, cat);
+                        if (next && next !== cat) run('rencat', () => renameCategory(branchId, cat, next));
+                      }}
+                    >
+                      <Pencil size={13} /> Rename
+                    </button>
+                    <button className="btn btn--ghost btn--sm" style={{ color: 'var(--danger)' }} onClick={() => setConfirmDelete({ category: cat })}>
+                      <Trash2 size={13} /> Delete
+                    </button>
+                  </div>
+                )}
               </div>
 
               {!isCollapsed && (
@@ -396,9 +408,11 @@ export default function MenuPage() {
                               </span>
                             </div>
                             <div className="menu-item__actions">
-                              <button className="btn btn--ghost btn--sm" onClick={() => setModal({ mode: 'edit', category: cat, itemKey: key, item })} aria-label={`Edit ${item.name}`}>
-                                <Pencil size={13} />
-                              </button>
+                              {canEditMenu && (
+                                <button className="btn btn--ghost btn--sm" onClick={() => setModal({ mode: 'edit', category: cat, itemKey: key, item })} aria-label={`Edit ${item.name}`}>
+                                  <Pencil size={13} />
+                                </button>
+                              )}
                               <button
                                 className="btn btn--ghost btn--sm"
                                 title={available ? 'Mark sold out' : 'Mark available'}
@@ -412,17 +426,20 @@ export default function MenuPage() {
                                 title={item.isBestSeller ? 'Remove best-seller badge' : 'Mark as best seller'}
                                 onClick={() => run('star', () => setBestSeller(branchId, cat, key, !item.isBestSeller))}
                                 aria-label={`Toggle best seller for ${item.name}`}
+                                hidden={!canEditMenu}
                               >
                                 <Star size={13} fill={item.isBestSeller ? 'var(--accent)' : 'none'} style={item.isBestSeller ? { color: 'var(--accent)' } : undefined} />
                               </button>
-                              <button
-                                className="btn btn--ghost btn--sm"
-                                style={{ color: 'var(--danger)', marginLeft: 'auto' }}
-                                onClick={() => setConfirmDelete({ category: cat, itemKey: key, item })}
-                                aria-label={`Delete ${item.name}`}
-                              >
-                                <Trash2 size={13} />
-                              </button>
+                              {canDelete && (
+                                <button
+                                  className="btn btn--ghost btn--sm"
+                                  style={{ color: 'var(--danger)', marginLeft: 'auto' }}
+                                  onClick={() => setConfirmDelete({ category: cat, itemKey: key, item })}
+                                  aria-label={`Delete ${item.name}`}
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>

@@ -17,10 +17,11 @@ import { auth, database } from '../lib/firebase';
 import { loadUserNickname, saveUserNickname } from '../lib/menuApi';
 import {
   createWorkspace,
-  loadWorkspace,
+  loadAccessContext,
   registerKiosk,
   deleteBranchToWorkspace,
 } from '../lib/workspaceApi';
+import { ROLE, can as canCap } from '../lib/permissions';
 
 const AuthContext = createContext(null);
 
@@ -64,6 +65,7 @@ export function AuthProvider({ children }) {
   const [nicknameLoaded, setNicknameLoaded] = useState(false);
   const [workspace, setWorkspace] = useState(null);
   const [workspaceLoaded, setWorkspaceLoaded] = useState(false);
+  const [role, setRole] = useState(null);
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -86,11 +88,13 @@ export function AuthProvider({ children }) {
 
         Promise.all([
           loadUserNickname(firebaseUser.uid),
-          loadWorkspace(firebaseUser.uid),
+          loadAccessContext(firebaseUser.uid, firebaseUser.email),
         ])
-          .then(([userNickname, currentWorkspace]) => {
+          .then(([userNickname, access]) => {
+            const currentWorkspace = access?.workspace || null;
             setNickname(userNickname || '');
             setWorkspace(currentWorkspace);
+            setRole(access?.role || null);
             if (currentWorkspace?.companyId) {
               update(ref(database, `${currentWorkspace.companyId}/users/${firebaseUser.uid}`), {
                 email: firebaseUser.email || '',
@@ -116,6 +120,7 @@ export function AuthProvider({ children }) {
         setNicknameLoaded(false);
         setWorkspace(null);
         setWorkspaceLoaded(true);
+        setRole(null);
         localStorage.removeItem(AUTH_KEY);
         sessionStorage.removeItem(AI_SHIFT_HANDOFF_COMPLETED);
         sessionStorage.removeItem(AI_LIVEOPS_INITIAL_COMPLETED);
@@ -223,6 +228,8 @@ export function AuthProvider({ children }) {
     setWorkspace((current) => ({ ...(current || {}), ...(nextWorkspace || {}) }));
   }, []);
 
+  const can = useCallback((capability) => canCap(role, capability), [role]);
+
   const updateNickname = useCallback(
     async (newNickname) => {
       if (!user?.uid) return;
@@ -245,6 +252,7 @@ export function AuthProvider({ children }) {
       sessionStorage.removeItem(AI_LIVEOPS_INITIAL_COMPLETED);
       sessionStorage.removeItem(AI_LIVEOPS_NEXT_RUNTIME);
       sessionStorage.removeItem(AI_FEED_ITEMS);
+      setRole(null);
       await signOut(auth);
     } catch (err) {
       setError(err.message);
@@ -332,6 +340,11 @@ export function AuthProvider({ children }) {
         nicknameLoaded,
         workspace,
         workspaceLoaded,
+        role,
+        can,
+        isOwner: role === ROLE.OWNER,
+        isManager: role === ROLE.MANAGER,
+        isStaff: role === ROLE.STAFF,
         updateNickname,
         changePassword,
         login,

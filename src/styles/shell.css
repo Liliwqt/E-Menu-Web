@@ -354,6 +354,53 @@
   .shell__bottomItem.is-active { color: var(--primary); background: var(--nav-active-bg); }
 }
 
+/* ── Mobile "More" sheet ───────────────────────────────────────────── */
+.shell__moreSheet {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-nav);
+  display: flex;
+  align-items: flex-end;
+  background: rgba(0, 0, 0, 0.45);
+  animation: shellMoreFade var(--dur-fast) ease;
+}
+
+.shell__morePanel {
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  max-height: 82dvh;
+  overflow-y: auto;
+  background: var(--surface);
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  border-top: 1px solid var(--border);
+  padding: var(--sp-5);
+  padding-bottom: calc(var(--sp-5) + env(safe-area-inset-bottom));
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.18);
+  animation: shellMoreSlide var(--dur-med) cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.shell__morePanel .shell__navLabel { margin-top: var(--sp-4); }
+.shell__morePanel .shell__navLabel:first-of-type { margin-top: 0; }
+
+.shell__moreHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--border);
+}
+
+@keyframes shellMoreFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes shellMoreSlide {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
 /* ── Kiosk Register Dialog ─────────────────────────────────────────── */
 .kr__overlay {
   position: fixed;

@@ -1,9 +1,9 @@
 // Shared helper: mint a fresh Firebase RTDB access token using the Firebase CLI's
 // stored refresh token. The OAuth client_id/client_secret are read from the
 // installed firebase-tools package at runtime — never hardcoded here.
-const fs = require('node:fs');
-const os = require('node:os');
-const path = require('node:path');
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 function findFirebaseTools() {
   const candidates = [

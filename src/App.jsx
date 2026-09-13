@@ -16,6 +16,7 @@ const HistoryPage = React.lazy(() => import('./pages/HistoryPage'));
 const AdminHomePage = React.lazy(() => import('./pages/AdminHomePage'));
 const KiosksPage = React.lazy(() => import('./pages/KiosksPage'));
 const SubscriptionPage = React.lazy(() => import('./pages/SubscriptionPage'));
+const TeamPage = React.lazy(() => import('./pages/TeamPage'));
 
 function FullScreenLoader() {
   return (
@@ -92,6 +93,7 @@ export default function App() {
         <Route path="/reports/:branchId" element={branchRoute(ReportsPage)} />
         <Route path="/analytics-history/:branchId" element={branchRoute(HistoryPage)} />
         <Route path="/kiosks/:branchId" element={<ProtectedRoute><BranchScope><React.Suspense fallback={<FullScreenLoader />}><KiosksPage /></React.Suspense></BranchScope></ProtectedRoute>} />
+        <Route path="/team/:branchId" element={<ProtectedRoute><BranchScope><React.Suspense fallback={<FullScreenLoader />}><TeamPage /></React.Suspense></BranchScope></ProtectedRoute>} />
         <Route path="/subscription/:branchId" element={<ProtectedRoute><BranchScope><React.Suspense fallback={<FullScreenLoader />}><SubscriptionPage /></React.Suspense></BranchScope></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

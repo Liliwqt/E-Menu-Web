@@ -1,6 +1,7 @@
 import { get, ref, serverTimestamp, set, update, remove } from 'firebase/database';
 import { database } from './firebase';
 import { PLAN_FREE, PLAN_SUBSCRIPTION, SUBSCRIPTION_STATUS } from './planFeatures';
+import { resolveRole } from './permissions';
 
 export { isAiEnabled } from './planFeatures';
 
@@ -61,6 +62,49 @@ export async function loadWorkspace(uid) {
   return workspaceSnapshot.exists()
     ? { ...workspaceSnapshot.val(), companyId: account.companyId }
     : null;
+}
+
+/**
+ * Everything a session needs about access: the workspace plus the caller's
+ * effective role for their active branch. Role resolution is fail-closed, so a
+ * missing or unreadable record yields no role rather than elevated access.
+ */
+export async function loadAccessContext(uid, email) {
+  if (!uid) return { workspace: null, role: null, companyId: null, branchId: null };
+
+  const accountSnapshot = await get(ref(database, `accounts/${uid}`));
+  if (!accountSnapshot.exists()) {
+    return { workspace: null, role: null, companyId: null, branchId: null };
+  }
+
+  const account = accountSnapshot.val();
+  const companyId = account.companyId;
+  const branchId = account.activeBranchId;
+
+  // Each probe degrades to null on permission_denied: a record we cannot read
+  // simply contributes no role instead of failing the whole sign-in.
+  const [workspaceSnapshot, companySnapshot, memberSnapshot] = await Promise.all([
+    get(ref(database, `${companyId}/users/${uid}/workspace`)).catch(() => null),
+    get(ref(database, `${companyId}/companyProfile`)).catch(() => null),
+    branchId
+      ? get(ref(database, `${companyId}/branches/${branchId}/users/${uid}`)).catch(() => null)
+      : Promise.resolve(null),
+  ]);
+
+  const workspace = workspaceSnapshot?.exists()
+    ? { ...workspaceSnapshot.val(), companyId }
+    : null;
+  const isCompanyOwner = companySnapshot?.child('ownerUids')?.child(uid)?.val() === true;
+  const branchRole = memberSnapshot?.child('role')?.val() || null;
+
+  return {
+    workspace,
+    companyId,
+    branchId,
+    isCompanyOwner,
+    branchRole,
+    role: resolveRole({ email, accountRole: account.role, isCompanyOwner, branchRole }),
+  };
 }
 
 const TRIAL_DURATION_MS = 14 * 24 * 60 * 60 * 1000;
@@ -223,13 +267,13 @@ export async function createWorkspace({
     operatingHours: hours,
     backgroundTheme: 'Default',
   });
-  await set(ref(database, `${companyId}/branches/${branchId}/users`), {
-    [uid]: {
-      uid,
-      email: email || '',
-      role: 'owner',
-      addedAt: serverTimestamp(),
-    },
+  // Member-scoped write (never the whole /users node) so provisioning a second
+  // member later cannot clobber the first, and so the write stays a leaf write.
+  await set(ref(database, `${companyId}/branches/${branchId}/users/${uid}`), {
+    uid,
+    email: email || '',
+    role: 'owner',
+    addedAt: serverTimestamp(),
   });
 
   // The full workspace object (including branchId, plan, branches, etc.) is already
@@ -245,6 +289,7 @@ export async function createWorkspace({
     uid,
     companyId,
     activeBranchId: branchId,
+    role: 'owner',
     updatedAt: serverTimestamp(),
   });
 
@@ -344,8 +389,11 @@ export async function addBranchToWorkspace({
     })
   );
   await writeWithRetry(() =>
-    set(ref(database, `${companyId}/branches/${branchId}/users`), {
-      [uid]: { uid, email: email || '', role: 'owner', addedAt: now },
+    set(ref(database, `${companyId}/branches/${branchId}/users/${uid}`), {
+      uid,
+      email: email || '',
+      role: 'owner',
+      addedAt: now,
     })
   );
 
@@ -376,6 +424,11 @@ export async function addBranchToWorkspace({
   };
 
   await set(ref(database, `${companyId}/users/${uid}/workspace`), updatedWorkspace);
+  // Keep the flat branchIds index in step. It was only ever written at onboarding,
+  // so branches added afterwards were invisible to any rule that falls back to it.
+  await writeWithRetry(() =>
+    update(ref(database, `${companyId}/users/${uid}/branchIds`), { [branchId]: true })
+  );
   // accounts/{uid} .validate requires uid, companyId and activeBranchId —
   // omitting uid/companyId here previously caused an intermittent
   // permission_denied after the branch was created (validation failure), which
@@ -385,6 +438,7 @@ export async function addBranchToWorkspace({
       uid,
       companyId,
       activeBranchId: branchId,
+      role: 'owner',
       updatedAt: serverTimestamp(),
     })
   );
@@ -442,10 +496,14 @@ export async function deleteBranchToWorkspace(uid, branchId) {
     updatedAt: serverTimestamp(),
   };
   await set(ref(database, `${companyId}/users/${uid}/workspace`), updatedWorkspace);
+  // Mirror the removal into the flat branchIds index: the rules read that path and
+  // it must not keep pointing at a branch that no longer exists.
+  await remove(ref(database, `${companyId}/users/${uid}/branchIds/${branchId}`)).catch(() => {});
   await set(ref(database, `accounts/${uid}`), {
     uid,
     companyId,
     activeBranchId: nextBranchId,
+    role: 'owner',
     updatedAt: serverTimestamp(),
   });
 
@@ -562,4 +620,140 @@ export async function downgradeToFree(uid, branchId) {
   });
 
   return loadWorkspace(uid);
+}
+
+// ─── Team management ────────────────────────────────────────────────────────
+//
+// Accounts are provisioned by the owner (or, for staff, by the branch manager).
+// The owner supplies the email and a temporary password; we create the Firebase
+// Auth user and then write the three database records that give it a home:
+//
+//   accounts/{memberUid}                          -> companyId + activeBranchId
+//   {companyId}/users/{memberUid}                 -> profile + workspace snapshot
+//   {companyId}/branches/{branchId}/users/{uid}   -> branch role
+//
+// A manager is additionally recorded on the branch as `branchProfile.managerUid`,
+// which is what makes a manager's assignment a single, unambiguous pointer.
+
+const TEAM_ROLES = ['manager', 'staff'];
+
+function assertTeamRole(role) {
+  if (!TEAM_ROLES.includes(role)) {
+    throw new Error('Role must be either "manager" or "staff".');
+  }
+}
+
+/**
+ * Provisions a branch manager or staff member.
+ *
+ * `provisionAuthAccount` must have already created the Firebase Auth user; this
+ * function only writes data. Keeping the two apart means a failed database write
+ * leaves an orphaned auth user (recoverable) rather than a half-built membership.
+ */
+export async function provisionTeamMember({
+  ownerUid,
+  companyId,
+  branchId,
+  memberUid,
+  email,
+  displayName,
+  role,
+  branchName,
+  plan = PLAN_FREE,
+}) {
+  if (!companyId || !branchId || !memberUid) {
+    throw new Error('companyId, branchId and memberUid are required.');
+  }
+  assertTeamRole(role);
+
+  const now = serverTimestamp();
+  const name = cleanText(displayName, 80);
+  const memberEmail = cleanText(email, 160);
+
+  if (role === 'manager') {
+    // One manager per branch: record the incumbent before the membership row, so
+    // the branch always advertises who manages it.
+    await set(ref(database, `${companyId}/branches/${branchId}/branchProfile/managerUid`), memberUid);
+  }
+
+  await set(ref(database, `${companyId}/branches/${branchId}/users/${memberUid}`), {
+    uid: memberUid,
+    email: memberEmail,
+    role,
+    addedBy: ownerUid || '',
+    addedAt: now,
+  });
+
+  // The member's own workspace snapshot. Mirrors the shape onboarding produces so
+  // getUserBranch()/canAccessBranch() work unchanged for a non-owner.
+  const workspace = {
+    companyId,
+    branchId,
+    branchName: branchName || branchId,
+    businessName: branchName || branchId,
+    plan,
+    onboardingComplete: true,
+    createdAt: now,
+  };
+
+  await set(ref(database, `${companyId}/users/${memberUid}`), {
+    uid: memberUid,
+    email: memberEmail,
+    displayName: name,
+    companyId,
+    companyRole: role,
+    role,
+    branchIds: { [branchId]: true },
+    workspace,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  // Written last: once this exists the account can sign in and resolve its role,
+  // so a failure here simply means the invitee cannot log in yet.
+  await set(ref(database, `accounts/${memberUid}`), {
+    uid: memberUid,
+    companyId,
+    activeBranchId: branchId,
+    role,
+    updatedAt: now,
+  });
+
+  return memberUid;
+}
+
+/**
+ * Revokes a team member's access.
+ *
+ * Removal deletes the records the member needs to resolve a role, which is
+ * fail-closed: with no membership row there is no branch role, and with no
+ * company record there is no company. The Firebase Auth user is left in place —
+ * deleting it needs the Admin SDK, and an auth user with no records can do
+ * nothing. Re-inviting the same email will fail until that user is removed from
+ * the Firebase console.
+ */
+export async function removeTeamMember({ companyId, branchId, memberUid, isManager }) {
+  if (!companyId || !branchId || !memberUid) {
+    throw new Error('companyId, branchId and memberUid are required.');
+  }
+
+  await remove(ref(database, `${companyId}/branches/${branchId}/users/${memberUid}`));
+  await remove(ref(database, `${companyId}/users/${memberUid}`)).catch(() => {});
+  await remove(ref(database, `accounts/${memberUid}`)).catch(() => {});
+
+  if (isManager) {
+    const managerRef = ref(database, `${companyId}/branches/${branchId}/branchProfile/managerUid`);
+    const snapshot = await get(managerRef).catch(() => null);
+    if (snapshot?.val() === memberUid) {
+      await remove(managerRef);
+    }
+  }
+}
+
+/** The members of a branch, as an array of membership records. */
+export async function loadBranchMembers(companyId, branchId) {
+  if (!companyId || !branchId) return [];
+  const snapshot = await get(ref(database, `${companyId}/branches/${branchId}/users`)).catch(() => null);
+  if (!snapshot?.exists()) return [];
+  return Object.entries(snapshot.val()).map(([uid, data]) => ({ uid, ...data }));
 }

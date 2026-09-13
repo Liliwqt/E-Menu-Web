@@ -15,7 +15,7 @@ const SECTIONS = [
       },
       {
         heading: 'How to move around',
-        text: '• On computers: Use the menu on the left side.\n• On phones: Use the buttons at the bottom of the screen.',
+        text: '• On computers: Use the menu on the left, grouped into Overview, Insights, and Settings.\n• On phones: Use the four buttons at the bottom for everyday tools — Dashboard, Orders, Menu, Inventory.\n• Tap More on the bottom bar to reach Analytics, Reports, Order History, Kiosks, and Subscription.',
       }
     ],
   },
@@ -134,11 +134,11 @@ const SECTIONS = [
   {
     id: 'order-ledger',
     icon: History,
-    title: 'Order Ledger (History)',
+    title: 'Order History',
     content: [
       {
         heading: 'Where to find it',
-        text: 'Look for this icon in your menu to view the Order Ledger.',
+        text: 'Look for this icon in your menu to view past orders.',
         visualIcon: History,
       },
       {

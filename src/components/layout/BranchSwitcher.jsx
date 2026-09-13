@@ -3,10 +3,15 @@ import { Building2, ChevronDown, Plus, Trash2, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { addBranchToWorkspace, loadWorkspace } from '../../lib/workspaceApi';
+import { CAP } from '../../lib/permissions';
 
 export default function BranchSwitcher({ branchId, compact = false }) {
   const navigate = useNavigate();
-  const { user, workspace, setWorkspaceFromProps, deleteBranchWithPassword } = useAuth();
+  const { user, workspace, setWorkspaceFromProps, deleteBranchWithPassword, can } = useAuth();
+  // Creating and deleting branches is company-level: owner only. A manager or
+  // staff account is assigned to a branch and simply never sees the switcher
+  // controls for changing that.
+  const canManageBranches = can(CAP.MANAGE_BRANCHES);
   const [open, setOpen] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [branchName, setBranchName] = useState('');
@@ -155,21 +160,25 @@ export default function BranchSwitcher({ branchId, compact = false }) {
                 <strong>{branch.name}</strong>
                 <small>{branch.location}</small>
               </button>
-              <button
-                type="button"
-                className="branch-switcher__delete"
-                onClick={() => openDelete(branch)}
-                aria-label={`Delete ${branch.name}`}
-                title={branches.length <= 1 ? 'Cannot delete the only branch' : 'Delete this branch'}
-                disabled={branches.length <= 1}
-              >
-                <Trash2 size={14} />
-              </button>
+              {canManageBranches && (
+                <button
+                  type="button"
+                  className="branch-switcher__delete"
+                  onClick={() => openDelete(branch)}
+                  aria-label={`Delete ${branch.name}`}
+                  title={branches.length <= 1 ? 'Cannot delete the only branch' : 'Delete this branch'}
+                  disabled={branches.length <= 1}
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
             </div>
           ))}
-          <button type="button" className="branch-switcher__add" onClick={() => setShowAdd(true)}>
-            <Plus size={15} /> Add branch
-          </button>
+          {canManageBranches && (
+            <button type="button" className="branch-switcher__add" onClick={() => setShowAdd(true)}>
+              <Plus size={15} /> Add branch
+            </button>
+          )}
         </div>
       )}
 

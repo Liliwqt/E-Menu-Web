@@ -4,6 +4,11 @@ dist
 *.log
 .DS_Store
 
+# Local snapshot of the deployed security rules (may contain live project data)
+.rules-backup-*.json
+# Local snapshot of the live database (may contain customer data)
+.db-backup-*.json
+
 # Local coding-agent metadata
 .claude/
 .agents/

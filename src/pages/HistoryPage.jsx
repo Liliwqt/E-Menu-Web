@@ -22,7 +22,7 @@ const CORRECTION_REASONS = [
 function ts(log) { return log.timestamp || log.createdAt || 0; }
 
 /**
- * Order Ledger — every recorded order (active + archived) with
+ * Order History — every recorded order (active + archived) with
  * include/exclude analytics corrections. Fully responsive: table on
  * desktop, cards on mobile (V1's mobile deletion bug class is gone).
  */
@@ -77,7 +77,7 @@ export default function HistoryPage() {
   }
 
   return (
-    <AppShell title="Order Ledger">
+    <AppShell title="Order History">
       <section className="card card--pad rise" style={{ marginBottom: 'var(--sp-4)' }}>
         <div className="flex gap-2" style={{ alignItems: 'flex-start' }}>
           <Info size={16} style={{ color: 'var(--primary)', flexShrink: 0, marginTop: 3 }} />

@@ -194,7 +194,7 @@ export default function AnalyticsPage() {
         </div>
         <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
           <button className="btn btn--secondary btn--sm" onClick={() => navigate(`/analytics-history/${branchId}`)}>
-            <History size={14} /> Order ledger
+            <History size={14} /> Order history
           </button>
           <button className="btn btn--secondary btn--sm" onClick={() => navigate(`/reports/${branchId}`)}>
             <FileText size={14} /> Reports
