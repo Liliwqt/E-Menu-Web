@@ -16,6 +16,9 @@
   z-index: var(--z-nav);
   padding: var(--sp-5) var(--sp-4);
   gap: var(--sp-5);
+  /* Fixed-height column: whatever does not fit must scroll inside .shell__nav,
+     never spill past the viewport where nothing can reach it. */
+  overflow: hidden;
 }
 
 .shell__brand {
@@ -23,6 +26,7 @@
   align-items: center;
   gap: 12px;
   padding: 4px 8px;
+  flex-shrink: 0;
 }
 
 .shell__brandMark {
@@ -51,7 +55,7 @@
   font-weight: 550;
 }
 
-.branch-switcher { position: relative; z-index: 2; }
+.branch-switcher { position: relative; z-index: 2; flex-shrink: 0; }
 .branch-switcher__trigger {
   width: 100%; display: flex; align-items: center; gap: 8px; padding: 10px;
   border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-2);
@@ -153,7 +157,33 @@
 .branch-switcher__menu--compact .branch-switcher__delete { width: 40px; height: 44px; }
 .branch-switcher__menu--compact .branch-switcher__error { min-height: 40px; display: grid; place-items: center; }
 
-.shell__nav { display: grid; gap: 3px; flex: 1; align-content: start; }
+/* The nav owns the leftover height and scrolls on its own, so the brand above and
+   the account footer below stay pinned no matter how many items are present.
+   `min-height: 0` is what actually permits it to shrink — a flex item defaults to
+   `min-height: auto` and would otherwise grow to fit its content and push the
+   footer off-screen. */
+.shell__nav {
+  display: grid;
+  gap: 3px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  align-content: start;
+  overscroll-behavior: contain;
+  /* Widen slightly so the scrollbar sits outside the focus rings. */
+  margin: 0 calc(-1 * var(--sp-2));
+  padding: 0 var(--sp-2) 2px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.shell__nav::-webkit-scrollbar { width: 8px; }
+.shell__nav::-webkit-scrollbar-track { background: transparent; }
+.shell__nav::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+  border: 2px solid var(--surface);
+}
 
 .shell__navLabel {
   font-size: 0.66rem;
@@ -161,15 +191,18 @@
   letter-spacing: 0.1em;
   font-weight: 700;
   color: var(--text-3);
-  padding: var(--sp-4) 10px 6px;
+  padding: var(--sp-3) 10px 4px;
 }
+
+/* The sidebar gap already separates the first group from the switcher. */
+.shell__navLabel:first-child { padding-top: 0; }
 
 .shell__navItem {
   display: flex;
   align-items: center;
   gap: 11px;
-  padding: 10px 12px;
-  min-height: 42px;
+  padding: 9px 12px;
+  min-height: 40px;
   border: none;
   border-radius: var(--r-md);
   background: transparent;
@@ -200,7 +233,8 @@
   background: var(--primary);
 }
 
-.shell__footer { display: grid; gap: var(--sp-3); }
+/* Pinned: the nav absorbs the height pressure, the footer never shrinks. */
+.shell__footer { display: grid; gap: var(--sp-3); flex-shrink: 0; }
 
 .shell__user {
   display: flex;
