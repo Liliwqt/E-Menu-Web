@@ -201,6 +201,18 @@ export function AuthProvider({ children }) {
           ...setup,
         });
         setWorkspace(nextWorkspace);
+        // Onboarding has just created the company, so the role resolved at sign-in
+        // — back when no account record existed — is stale. Re-resolve it, or the
+        // new owner is treated as having no capabilities and the navigation hides
+        // Menu, Insights and Settings from them.
+        // Whoever completes onboarding owns the workspace they just created, so
+        // that is the fallback; a read failure must not fail the onboarding call.
+        try {
+          const access = await loadAccessContext(auth.currentUser.uid, auth.currentUser.email);
+          setRole(access?.role || ROLE.OWNER);
+        } catch {
+          setRole(ROLE.OWNER);
+        }
         return nextWorkspace;
       } catch (err) {
         setError(err.message);
