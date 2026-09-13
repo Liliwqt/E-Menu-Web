@@ -41,7 +41,12 @@
         // behalf so a provisioned account can resolve its company on first login.
         // Value is derived from newData, so it cannot be used to reach a company
         // the writer has no standing in.
-        ".write": "auth != null && (auth.uid == $uid || root.child(newData.child('companyId').val()).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || (newData.child('role').val() == 'staff' && root.child(newData.child('companyId').val()).child('users').child(auth.uid).child('companyRole').val() == 'manager'))",
+        //
+        // A member may still maintain their own row, but only once it exists and
+        // only without changing its role. `role` is what loadAccessContext() feeds
+        // to resolveRole(), so a self-write able to raise it would hand a signed-in
+        // account the manager UI on the strength of its own record alone.
+        ".write": "auth != null && (root.child(newData.child('companyId').val()).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || (newData.child('role').val() == 'staff' && root.child(newData.child('companyId').val()).child('users').child(auth.uid).child('companyRole').val() == 'manager') || (!newData.exists() && data.child('role').val() == 'staff' && root.child(data.child('companyId').val()).child('users').child(auth.uid).child('companyRole').val() == 'manager') || (auth.uid == $uid && data.exists() && newData.child('role').val() == data.child('role').val()))",
         // `role` is optional so records written before the role model existed still
         // validate on their next update. When present it must be a known role.
         ".validate": "newData.hasChildren(['uid', 'companyId', 'activeBranchId']) && newData.child('uid').val() == $uid && newData.child('companyId').isString() && newData.child('companyId').val().matches(/^company-[a-z0-9-]+$/) && newData.child('activeBranchId').isString() && (!newData.hasChild('role') || newData.child('role').val() == 'owner' || newData.child('role').val() == 'manager' || newData.child('role').val() == 'staff')"
@@ -75,10 +80,17 @@
       "users": {
         "$uid": {
           ".read": "auth != null && (auth.uid == $uid || root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true)",
-          // The owner may write any member's profile. A branch manager may write a
-          // profile only when it is tagged as staff, which keeps managers from
-          // creating peers or owners.
-          ".write": "auth != null && (auth.uid == $uid || root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || (newData.child('companyRole').val() == 'staff' && root.child($companyId).child('users').child(auth.uid).child('companyRole').val() == 'manager'))",
+          // The owner may write any member's profile. A branch manager may add,
+          // edit or remove one only while it is tagged staff, which keeps managers
+          // from minting a peer and from deleting the owner out of the company.
+          //
+          // Unqualified self-service is deliberately absent. `auth.uid == $uid` on
+          // its own let any signed-in account insert itself into any company's
+          // member list, and the company-wide .read trusts that list, so the row
+          // bought read access to every branch the company owns. Membership has to
+          // be granted by someone with standing, or by the bootstrap path
+          // (ownerUids) that onboarding writes before this node.
+          ".write": "auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || (((newData.child('companyRole').val() == 'staff') || (!newData.exists() && data.child('companyRole').val() == 'staff')) && root.child($companyId).child('users').child(auth.uid).child('companyRole').val() == 'manager') || (auth.uid == $uid && data.exists() && newData.child('companyRole').val() == data.child('companyRole').val()))",
           ".validate": "newData.hasChildren(['uid', 'email', 'companyId']) && newData.child('uid').val() == $uid && newData.child('companyId').val() == $companyId"
         }
       },
@@ -99,8 +111,13 @@
               ".read": "auth != null && (auth.uid == $uid || root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'owner' || root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'manager')",
               // The owner may assign any role. A branch's manager may add staff to
               // that branch only — never another manager, and never to a branch
-              // they do not manage.
-              ".write": "auth != null && (auth.uid == $uid || root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || (newData.child('role').val() == 'staff' && root.child($companyId).child('branches').child($branchId).child('branchProfile').child('managerUid').val() == auth.uid))",
+              // they do not manage — and may take that staff back out again.
+              //
+              // Self-service is confined to an existing row whose role does not
+              // change. Blanket `auth.uid == $uid` previously let any signed-in
+              // account write itself onto any branch roster as 'manager' or
+              // 'owner', which handed over that branch's menu outright.
+              ".write": "auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || (root.child($companyId).child('branches').child($branchId).child('branchProfile').child('managerUid').val() == auth.uid && (newData.child('role').val() == 'staff' || (!newData.exists() && data.child('role').val() == 'staff'))) || (auth.uid == $uid && data.exists() && newData.child('role').val() == data.child('role').val()))",
               ".validate": "newData.hasChildren(['uid', 'role']) && newData.child('uid').val() == $uid && (newData.child('role').val() == 'owner' || newData.child('role').val() == 'manager' || newData.child('role').val() == 'staff')"
             }
           },
@@ -127,6 +144,42 @@
           },
           "appSettings": {
             ".read": "auth != null && (root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).exists() || root.child($companyId).child('branches').child($branchId).child('kiosks').child(auth.uid).child('isActive').val() == true)",
+            ".write": "auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid || root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'manager')"
+          },
+          // Analytics is a derived roll-up of the order ledger, and processing runs
+          // in whichever session is open (useAnalyticsProcessor polls for new
+          // orders), so every branch member has to be able to write it. Restricting
+          // this to managers would leave orders placed during a staff-only shift
+          // uncounted until a manager next signed in. The blast radius is one
+          // aggregate, and rebuildAnalyticsFromLogs() can regenerate it.
+          "analytics": {
+            ".read": "auth != null && root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).exists()",
+            ".write": "auth != null && root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).exists()"
+          },
+          // Restocking appends a history row. adjustStock() writes stock first and
+          // the history row second without a try/catch, so a denial here surfaced
+          // as a failed stock adjustment even though the stock change had landed.
+          "inventoryHistory": {
+            ".read": "auth != null && root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).exists()",
+            ".write": "auth != null && root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).exists()"
+          },
+          // Discarding one order belongs to the manager who runs the branch. Emptying
+          // the bin outright is an owner action, so the node-level .write is owner-
+          // only and the per-order .write widens it to managers. Rules cascade
+          // downward, so deleting the whole node never reaches the child rule.
+          "deletedLogs": {
+            ".read": "auth != null && root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).exists()",
+            ".write": "auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid)",
+            "$orderId": {
+              ".write": "auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid || root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'manager')"
+            }
+          },
+          // Menu edit audit trail. addMenuLog() rides along with every menu change,
+          // so it has to be writable by the same roles that can edit the menu.
+          // No .read is declared: the branch node already grants every member read
+          // of the subtree, and a child rule can only widen access, never narrow it,
+          // so anything written here would be decoration rather than a restriction.
+          "menuLogs": {
             ".write": "auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid || root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'manager')"
           },
           "logs": {
