@@ -2,9 +2,11 @@ import { useMemo, useState } from 'react';
 import { History, Search, EyeOff, Eye, Info } from 'lucide-react';
 import AppShell from '../components/layout/AppShell';
 import { useBranchData } from '../context/BranchDataContext';
+import { useAuth } from '../context/AuthContext';
 import { excludeOrderFromAnalytics, includeOrderInAnalytics } from '../lib/analyticsApi';
 import { clearAnalysisCache } from '../lib/aiAnalystService';
 import { formatCurrency } from '../lib/statisticsUtils';
+import { CAP } from '../lib/permissions';
 import { getItems, orderTotal } from './OrdersPage';
 import '../styles/orders.css';
 
@@ -28,6 +30,10 @@ function ts(log) { return log.timestamp || log.createdAt || 0; }
  */
 export default function HistoryPage() {
   const { branchId, logs, deletedLogs } = useBranchData();
+  const { can } = useAuth();
+  // Correcting the ledger rewrites every analytics total, so it is a management
+  // action. Reading the ledger is not, and the route is open to any member.
+  const canCorrect = can(CAP.CORRECT_ANALYTICS);
   const [search, setSearch] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -58,6 +64,7 @@ export default function HistoryPage() {
   const includedTotal = filtered.filter((l) => l.analyticsExcluded !== true).reduce((s, l) => s + orderTotal(l), 0);
 
   async function toggle(log) {
+    if (!canCorrect) return;
     setBusyId(log.orderNum);
     setMessage('');
     try {
@@ -82,8 +89,10 @@ export default function HistoryPage() {
         <div className="flex gap-2" style={{ alignItems: 'flex-start' }}>
           <Info size={16} style={{ color: 'var(--primary)', flexShrink: 0, marginTop: 3 }} />
           <p className="card-sub" style={{ margin: 0 }}>
-            The ledger is the audit trail behind your analytics. Excluding an order (duplicate, test, training)
-            rebuilds every analytics total without deleting the record — you can restore it anytime.
+            The ledger is the audit trail behind your analytics.{' '}
+            {canCorrect
+              ? 'Excluding an order (duplicate, test, training) rebuilds every analytics total without deleting the record — you can restore it anytime.'
+              : 'Your role can read it, but corrections are made by a branch manager or the business owner.'}
           </p>
         </div>
       </section>
@@ -101,12 +110,14 @@ export default function HistoryPage() {
           <label className="field-label">To</label>
           <input type="date" className="input" style={{ width: 'auto' }} value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
         </div>
-        <div>
-          <label className="field-label">Exclusion reason</label>
-          <select className="select" style={{ width: 'auto' }} value={reason} onChange={(e) => setReason(e.target.value)}>
-            {CORRECTION_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
-          </select>
-        </div>
+        {canCorrect && (
+          <div>
+            <label className="field-label">Exclusion reason</label>
+            <select className="select" style={{ width: 'auto' }} value={reason} onChange={(e) => setReason(e.target.value)}>
+              {CORRECTION_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </div>
+        )}
       </div>
 
       {message && (
@@ -156,7 +167,9 @@ export default function HistoryPage() {
                       <span className={`pill ${log.archiveStatus === 'Active' ? 'pill--success' : 'pill--neutral'}`}>{log.archiveStatus}</span>
                     </td>
                     <td>
-                      {log.orderSource === 'android_kiosk' ? (
+                      {!canCorrect ? (
+                        <span className="muted">{excluded ? 'Excluded' : 'Counted'}</span>
+                      ) : log.orderSource === 'android_kiosk' ? (
                         <span className="muted">Kiosk-managed</span>
                       ) : (
                         <button

@@ -6,6 +6,7 @@ import { database, branchDataPath } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import { isSubscriptionActive, FEATURE, hasFeature } from '../lib/planFeatures';
 import { deregisterKiosk, registerKiosk } from '../lib/workspaceApi';
+import { CAP } from '../lib/permissions';
 import '../styles/kiosks.css';
 
 function formatRelativeTime(timestamp) {
@@ -24,9 +25,13 @@ function formatRelativeTime(timestamp) {
 export default function KiosksPage() {
   const { branchId } = useParams();
   const navigate = useNavigate();
-  const { user, workspace } = useAuth();
+  const { user, workspace, can } = useAuth();
   const subscriptionActive = isSubscriptionActive(workspace);
-  const canManage = hasFeature(workspace, FEATURE.MULTI_KIOSK);
+  // Two separate questions, both required: the plan has to include multi-kiosk,
+  // and the role has to be allowed to manage devices. hasFeature() alone was
+  // only ever the first one, so a staff account on a subscribed branch saw the
+  // register, enable/disable and deregister controls.
+  const canManage = can(CAP.MANAGE_KIOSKS) && hasFeature(workspace, FEATURE.MULTI_KIOSK);
   const [kiosks, setKiosks] = useState({});
   const [loading, setLoading] = useState(true);
   const [workingUid, setWorkingUid] = useState(null);

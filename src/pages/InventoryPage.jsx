@@ -10,6 +10,7 @@ import { useBranchData } from '../context/BranchDataContext';
 import { useAuth } from '../context/AuthContext';
 import { adjustStock, updateInventoryItem, getInventoryHistory } from '../lib/inventoryApi';
 import { getInventoryHealth, forecastStockShortages } from '../lib/executiveMetrics';
+import { CAP } from '../lib/permissions';
 import '../styles/inventory.css';
 
 function statusOf(item) {
@@ -28,7 +29,9 @@ const STATUS_META = {
 };
 
 function StockModal({ item, allSizes = [], branchId, onClose }) {
-  const { user } = useAuth();
+  const { user, can } = useAuth();
+  // Restocking is anyone's job; deciding what counts as low stock is not.
+  const canEditThresholds = can(CAP.EDIT_THRESHOLDS);
   const [value, setValue] = useState(Number(item.stock ?? 0));
   const [note, setNote] = useState('');
   // Per-size stock for every size of this menu item (labels come straight
@@ -76,7 +79,13 @@ function StockModal({ item, allSizes = [], branchId, onClose }) {
       const thresholdChanged = warnLevel !== Number(item.warningLevel ?? 10)
         || critLevel !== Number(item.criticalLevel ?? 5)
         || unit !== (item.unit || 'units');
-      if (thresholdChanged) {
+      // Alert thresholds are manager-and-above. The `inventory` rule grants the
+      // whole node to every member because it cannot scope to a single field
+      // without also blocking the stock writes beside it, so the split lives
+      // here. Skipped rather than attempted: this call sits after the stock
+      // writes in the same try, and a rejection would surface as a failed save
+      // on an adjustment that had already been applied.
+      if (canEditThresholds && thresholdChanged) {
         await updateInventoryItem(branchId, item.id, { warningLevel: warnLevel, criticalLevel: critLevel, unit });
       }
       onClose();
@@ -161,25 +170,29 @@ function StockModal({ item, allSizes = [], branchId, onClose }) {
           <input id="stock-note" className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Weekly delivery, spoilage, recount…" />
         </div>
 
-        <button className="btn btn--ghost btn--sm" style={{ justifySelf: 'start' }} onClick={() => setShowAdvanced((s) => !s)}>
-          <Gauge size={14} /> {showAdvanced ? 'Hide thresholds' : 'Alert thresholds & unit'}
-        </button>
+        {canEditThresholds && (
+          <>
+            <button className="btn btn--ghost btn--sm" style={{ justifySelf: 'start' }} onClick={() => setShowAdvanced((s) => !s)}>
+              <Gauge size={14} /> {showAdvanced ? 'Hide thresholds' : 'Alert thresholds & unit'}
+            </button>
 
-        {showAdvanced && (
-          <div style={{ display: 'grid', gap: 'var(--sp-3)', gridTemplateColumns: '1fr 1fr 1fr' }}>
-            <div>
-              <label className="field-label">Warn at</label>
-              <input className="input num" type="number" min="0" value={warnLevel} onChange={(e) => setWarnLevel(Number(e.target.value) || 0)} />
-            </div>
-            <div>
-              <label className="field-label">Critical at</label>
-              <input className="input num" type="number" min="0" value={critLevel} onChange={(e) => setCritLevel(Number(e.target.value) || 0)} />
-            </div>
-            <div>
-              <label className="field-label">Unit</label>
-              <input className="input" value={unit} onChange={(e) => setUnit(e.target.value)} />
-            </div>
-          </div>
+            {showAdvanced && (
+              <div style={{ display: 'grid', gap: 'var(--sp-3)', gridTemplateColumns: '1fr 1fr 1fr' }}>
+                <div>
+                  <label className="field-label">Warn at</label>
+                  <input className="input num" type="number" min="0" value={warnLevel} onChange={(e) => setWarnLevel(Number(e.target.value) || 0)} />
+                </div>
+                <div>
+                  <label className="field-label">Critical at</label>
+                  <input className="input num" type="number" min="0" value={critLevel} onChange={(e) => setCritLevel(Number(e.target.value) || 0)} />
+                </div>
+                <div>
+                  <label className="field-label">Unit</label>
+                  <input className="input" value={unit} onChange={(e) => setUnit(e.target.value)} />
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         <div>

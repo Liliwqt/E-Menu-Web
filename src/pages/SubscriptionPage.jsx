@@ -11,6 +11,7 @@ import {
 } from '../lib/planFeatures';
 import { upgradeToSubscription, downgradeToFree } from '../lib/workspaceApi';
 import { PLAN_FREE, PLAN_SUBSCRIPTION } from '../lib/planFeatures';
+import { CAP } from '../lib/permissions';
 import '../styles/subscription.css';
 
 const PLANS = [
@@ -47,7 +48,10 @@ const PLANS = [
 export default function SubscriptionPage() {
   const { branchId } = useParams();
   const navigate = useNavigate();
-  const { user, workspace, setWorkspaceFromProps } = useAuth();
+  const { user, workspace, setWorkspaceFromProps, can } = useAuth();
+  // Billing is the company owner's call. Managers and staff can read what the
+  // branch is on, which is useful when a feature is locked, but cannot change it.
+  const canManageBilling = can(CAP.MANAGE_BILLING);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState('');
 
@@ -56,7 +60,7 @@ export default function SubscriptionPage() {
   const daysLeft = trialDaysRemaining(workspace);
 
   async function handleUpgrade() {
-    if (!user?.uid || !branchId) return;
+    if (!user?.uid || !branchId || !canManageBilling) return;
     setError('');
     setWorking(true);
     try {
@@ -70,7 +74,7 @@ export default function SubscriptionPage() {
   }
 
   async function handleDowngrade() {
-    if (!user?.uid || !branchId) return;
+    if (!user?.uid || !branchId || !canManageBilling) return;
     if (!window.confirm('Switch to the Free plan? AI features will be disabled immediately.')) {
       return;
     }
@@ -133,7 +137,13 @@ export default function SubscriptionPage() {
                 ))}
               </ul>
               <div className="sub__planActions">
-                {option.id === PLAN_SUBSCRIPTION ? (
+                {!canManageBilling ? (
+                  isCurrent ? (
+                    <span className="sub__planCurrent">This is your branch's plan</span>
+                  ) : (
+                    <span className="sub__planCurrent">Ask the business owner to change plans</span>
+                  )
+                ) : option.id === PLAN_SUBSCRIPTION ? (
                   !subscriptionActive ? (
                     <button
                       type="button"

@@ -2,6 +2,7 @@ import React, { Suspense } from 'react';
 import { Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import { canAccessBranch, getUserBranch, isUserAdmin } from './config/authConfig';
+import { CAP } from './lib/permissions';
 import { BranchDataProvider } from './context/BranchDataContext';
 import LoginPage from './pages/LoginPage';
 import WorkspaceSetupPage from './pages/WorkspaceSetupPage';
@@ -68,11 +69,36 @@ function BranchScope({ children }) {
   return <BranchDataProvider branchId={branchId}>{children}</BranchDataProvider>;
 }
 
-function branchRoute(Page) {
+/**
+ * Keeps a page behind the capability it actually needs.
+ *
+ * Hiding the nav entry was the only thing standing between a role and these
+ * pages, and the entry is not the page: typing the URL rendered every control
+ * anyway, each one failing on its own once pressed. One redirect is a better
+ * answer than a screen of dead buttons.
+ *
+ * Waits for workspaceLoaded before judging. `role` is null until
+ * loadAccessContext() resolves, and can() is fail-closed, so deciding earlier
+ * would bounce a signed-in owner off their own pages on every refresh.
+ */
+function CapabilityRoute({ capability, children }) {
+  const { can, workspaceLoaded } = useAuth();
+  const { branchId } = useParams();
+
+  if (!capability) return children;
+  if (!workspaceLoaded) return <FullScreenLoader />;
+  if (can(capability)) return children;
+  // Dashboard carries no capability, so it is always a safe landing place.
+  return <Navigate to={branchId ? `/home/${branchId}` : '/'} replace />;
+}
+
+function branchRoute(Page, capability) {
   return (
     <ProtectedRoute>
       <BranchScope>
-        <Page />
+        <CapabilityRoute capability={capability}>
+          <Page />
+        </CapabilityRoute>
       </BranchScope>
     </ProtectedRoute>
   );
@@ -86,15 +112,19 @@ export default function App() {
         <Route path="/setup" element={<SetupRoute />} />
         <Route path="/home-admin" element={<ProtectedRoute adminOnly><AdminHomePage /></ProtectedRoute>} />
         <Route path="/home/:branchId" element={branchRoute(DashboardPage)} />
-        <Route path="/analytics/:branchId" element={branchRoute(AnalyticsPage)} />
+        <Route path="/analytics/:branchId" element={branchRoute(AnalyticsPage, CAP.VIEW_ANALYTICS)} />
         <Route path="/inventory/:branchId" element={branchRoute(InventoryPage)} />
         <Route path="/orders/:branchId" element={branchRoute(OrdersPage)} />
-        <Route path="/menu/:branchId" element={branchRoute(MenuPage)} />
-        <Route path="/reports/:branchId" element={branchRoute(ReportsPage)} />
-        <Route path="/analytics-history/:branchId" element={branchRoute(HistoryPage)} />
-        <Route path="/kiosks/:branchId" element={<ProtectedRoute><BranchScope><React.Suspense fallback={<FullScreenLoader />}><KiosksPage /></React.Suspense></BranchScope></ProtectedRoute>} />
-        <Route path="/team/:branchId" element={<ProtectedRoute><BranchScope><React.Suspense fallback={<FullScreenLoader />}><TeamPage /></React.Suspense></BranchScope></ProtectedRoute>} />
-        <Route path="/subscription/:branchId" element={<ProtectedRoute><BranchScope><React.Suspense fallback={<FullScreenLoader />}><SubscriptionPage /></React.Suspense></BranchScope></ProtectedRoute>} />
+        <Route path="/menu/:branchId" element={branchRoute(MenuPage, CAP.MANAGE_MENU)} />
+        <Route path="/reports/:branchId" element={branchRoute(ReportsPage, CAP.EXPORT_REPORTS)} />
+        {/* Matches the nav entry: the ledger is where corrections happen, and the
+            nav already withholds it from staff. Opening it read-only to staff is a
+            product call, not a technical one — HistoryPage renders correctly either
+            way, so only this capability and the nav entry change together. */}
+        <Route path="/analytics-history/:branchId" element={branchRoute(HistoryPage, CAP.CORRECT_ANALYTICS)} />
+        <Route path="/kiosks/:branchId" element={branchRoute(KiosksPage, CAP.MANAGE_KIOSKS)} />
+        <Route path="/team/:branchId" element={branchRoute(TeamPage, CAP.MANAGE_STAFF)} />
+        <Route path="/subscription/:branchId" element={branchRoute(SubscriptionPage, CAP.MANAGE_BILLING)} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>
