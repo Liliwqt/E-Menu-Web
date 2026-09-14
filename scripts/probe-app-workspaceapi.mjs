@@ -1,6 +1,22 @@
-// Run the ACTUAL createWorkspace() from the app against the live DB with anonymous auth.
-// We cannot import the app's module directly (it needs Vite env), so replicate EXACTLY,
-// including differing branch fields, sentinels, and nulls.
+/**
+ * Manual probe: does the live database accept the exact payload onboarding sends?
+ *
+ * Run by hand, not by the test suite:
+ *   node scripts/probe-app-workspaceapi.mjs
+ *
+ * ⚠ This talks to PRODUCTION. It signs in anonymously, writes a throwaway company
+ * and branch to the real database, checks the write is accepted, then deletes them.
+ * The rules are what is being probed — they only exist in their real form on the
+ * live project — so there is no offline version of this check.
+ *
+ * It used to be named `test-app-workspaceapi.mjs`, which put it inside the glob
+ * `node --test` matches (`**​/test-*.mjs`). The unit suite was therefore signing in
+ * to production and creating a company on every run, and failing intermittently
+ * whenever the network or anonymous sign-in hiccupped. A probe with side effects
+ * does not belong in a suite that is meant to be repeatable and offline.
+ *
+ * Exits non-zero when the write is refused, so a manual run reports something.
+ */
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously } from 'firebase/auth';
 import { getDatabase, ref, update, set, serverTimestamp } from 'firebase/database';
@@ -68,11 +84,13 @@ const payload = {
   },
 };
 
+let refused = false;
 try {
   await update(ref(db, companyId), payload);
   console.log('STEP 1 EXACT APP PAYLOAD: PASS');
 } catch (e) {
+  refused = true;
   console.log('STEP 1 EXACT APP PAYLOAD: FAIL', e.code, (e.message || '').split('\n')[0]);
 }
 try { await set(ref(db, companyId), null); } catch {}
-process.exit(0);
+process.exit(refused ? 1 : 0);

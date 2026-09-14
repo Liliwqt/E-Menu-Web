@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, UserPlus, Trash2, X, ShieldCheck, Users } from 'lucide-react';
+import { useBranchData } from '../context/BranchDataContext';
 import { useAuth } from '../context/AuthContext';
 import { ROLE, roleLabel, CAP } from '../lib/permissions';
 import { provisionAuthAccount } from '../lib/firebase';
@@ -29,7 +30,7 @@ function shortId(uid) {
 }
 
 export default function TeamPage() {
-  const { branchId } = useParams();
+  const { branchId } = useBranchData();
   const navigate = useNavigate();
   const { user, workspace, can, role } = useAuth();
 

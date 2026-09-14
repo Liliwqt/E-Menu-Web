@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Check, Sparkles, Loader2 } from 'lucide-react';
+import { useBranchData } from '../context/BranchDataContext';
 import { useAuth } from '../context/AuthContext';
 import {
   isSubscriptionActive,
@@ -46,7 +47,7 @@ const PLANS = [
 ];
 
 export default function SubscriptionPage() {
-  const { branchId } = useParams();
+  const { branchId } = useBranchData();
   const navigate = useNavigate();
   const { user, workspace, setWorkspaceFromProps, can } = useAuth();
   // Billing is the company owner's call. Managers and staff can read what the

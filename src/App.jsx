@@ -1,11 +1,12 @@
 import React, { Suspense } from 'react';
-import { Routes, Route, Navigate, useParams } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import { canAccessBranch, getUserBranch } from './config/authConfig';
 import { CAP } from './lib/permissions';
 import { ROUTE_DECISION, protectedRouteDecision, setupRouteDecision } from './lib/routeAccess';
 import { CHUNK_FAILURE_ACTION, buildRecoveryUrl, chunkFailureAction } from './lib/chunkRecovery';
-import { BranchDataProvider } from './context/BranchDataContext';
+import { branchRefFor, resolveBranchRef, withBranchRef } from './lib/branchRef';
+import { BranchDataProvider, useBranchData } from './context/BranchDataContext';
 import LoginPage from './pages/LoginPage';
 import WorkspaceSetupPage from './pages/WorkspaceSetupPage';
 import AccessErrorScreen from './components/ui/AccessErrorScreen';
@@ -61,8 +62,21 @@ function FullScreenLoader() {
 function ProtectedRoute({ children }) {
   const { isAuthenticated, initialLoading, workspaceLoaded, workspaceStatus, workspace } = useAuth();
   const params = useParams();
-  const branchId = params.branchId;
+  const location = useLocation();
+  const branchRef = params.branchId;
   const homeBranchId = getUserBranch(workspace);
+
+  // The URL may name the branch (`/home/branch1`) or use its id. Everything below
+  // reads data with the id, so the segment is resolved before any decision is
+  // taken. The kiosk bridge is handed this resolved value too, and it validates
+  // the id shape, so passing the nicer form through would break provisioning.
+  const resolvedBranchId = resolveBranchRef(workspace, branchRef);
+
+  // Resolution can legitimately fail — a branch since renamed, or a link to one
+  // this account cannot see. Passing the raw segment on is deliberate:
+  // canAccessBranch is guaranteed to reject anything that did not resolve, which
+  // lands on the home redirect instead of rendering a branch with no data.
+  const accessBranchId = resolvedBranchId || branchRef;
 
   // The ordering that decides this is in routeAccess.js, where a test can pin it
   // down. In particular: a read that failed must reach the retry screen rather
@@ -73,7 +87,7 @@ function ProtectedRoute({ children }) {
     workspaceLoaded,
     workspaceStatus,
     workspace,
-    branchId,
+    branchId: accessBranchId,
     canAccessBranch,
   });
 
@@ -82,7 +96,18 @@ function ProtectedRoute({ children }) {
   if (decision === ROUTE_DECISION.ACCESS_ERROR) return <AccessErrorScreen />;
   if (decision === ROUTE_DECISION.SETUP) return <Navigate to="/setup" replace />;
   if (decision === ROUTE_DECISION.REDIRECT_HOME) {
-    return <Navigate to={`/home/${homeBranchId}`} replace />;
+    return <Navigate to={`/home/${branchRefFor(workspace, homeBranchId)}`} replace />;
+  }
+
+  // Settle the address before rendering: a link may arrive with either form, and
+  // the bar should not disagree with the page about which branch is open. This
+  // runs on navigation as well, because in-app links are built from the id, which
+  // is always valid and never ambiguous.
+  const canonicalRef = branchRefFor(workspace, resolvedBranchId);
+  if (canonicalRef && canonicalRef !== branchRef) {
+    // Query and hash are carried across; only the branch segment is rewritten.
+    const target = withBranchRef(location.pathname, canonicalRef);
+    return <Navigate to={`${target}${location.search}${location.hash}`} replace />;
   }
 
   return children;
@@ -103,7 +128,7 @@ function SetupRoute() {
   if (decision === ROUTE_DECISION.LOGIN) return <Navigate to="/" replace />;
   if (decision === ROUTE_DECISION.ACCESS_ERROR) return <AccessErrorScreen />;
   if (decision === ROUTE_DECISION.REDIRECT_HOME) {
-    return <Navigate to={`/home/${workspace.branchId}`} replace />;
+    return <Navigate to={`/home/${branchRefFor(workspace, workspace.branchId)}`} replace />;
   }
 
   return <WorkspaceSetupPage />;
@@ -111,7 +136,11 @@ function SetupRoute() {
 
 /** Provides shared live branch data to every page below a /:branchId route. */
 function BranchScope({ children }) {
-  const { branchId } = useParams();
+  const { workspace } = useAuth();
+  const { branchId: branchRef } = useParams();
+  // Every consumer of this provider — the shell, its nav paths, the kiosk bridge,
+  // the processors and the pages — needs the real id, not the readable form.
+  const branchId = resolveBranchRef(workspace, branchRef);
   return <BranchDataProvider branchId={branchId}>{children}</BranchDataProvider>;
 }
 
@@ -129,7 +158,7 @@ function BranchScope({ children }) {
  */
 function CapabilityRoute({ capability, children }) {
   const { can, workspaceLoaded } = useAuth();
-  const { branchId } = useParams();
+  const { branchId } = useBranchData();
 
   if (!capability) return children;
   if (!workspaceLoaded) return <FullScreenLoader />;

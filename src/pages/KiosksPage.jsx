@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Monitor, RefreshCw, Power, AlertTriangle, Plus, X } from 'lucide-react';
 import { ref, onValue, off, update, serverTimestamp } from 'firebase/database';
 import { database, branchDataPath } from '../lib/firebase';
+import { useBranchData } from '../context/BranchDataContext';
 import { useAuth } from '../context/AuthContext';
 import { isSubscriptionActive, FEATURE, hasFeature } from '../lib/planFeatures';
 import { deregisterKiosk, registerKiosk } from '../lib/workspaceApi';
@@ -23,7 +24,7 @@ function formatRelativeTime(timestamp) {
 }
 
 export default function KiosksPage() {
-  const { branchId } = useParams();
+  const { branchId } = useBranchData();
   const navigate = useNavigate();
   const { user, workspace, can } = useAuth();
   const subscriptionActive = isSubscriptionActive(workspace);
