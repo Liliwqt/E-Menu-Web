@@ -5,6 +5,7 @@ import { ref, onValue, off, update, serverTimestamp } from 'firebase/database';
 import { database, branchDataPath } from '../lib/firebase';
 import { useBranchData } from '../context/BranchDataContext';
 import { useAuth } from '../context/AuthContext';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { isSubscriptionActive, FEATURE, hasFeature } from '../lib/planFeatures';
 import { deregisterKiosk, registerKiosk } from '../lib/workspaceApi';
 import { CAP } from '../lib/permissions';
@@ -73,14 +74,20 @@ export default function KiosksPage() {
     }
   }
 
+  // Which kiosk is awaiting confirmation. Deregistering cannot be undone from
+  // here, so it asks first — in the page, because the browser dialog this used
+  // to call is refused in a sandboxed frame and returns false in the Android
+  // WebView, where the kiosk admin screen actually runs.
+  const [confirmDeregister, setConfirmDeregister] = useState(null);
+
   async function handleDeregister(kioskUid) {
-    if (!window.confirm('Deregister this kiosk? It will need to be set up again before use.')) return;
     setError('');
     setWorkingUid(kioskUid);
     try {
       if (user?.uid) {
         await deregisterKiosk(user.uid, branchId, kioskUid);
       }
+      setConfirmDeregister(null);
     } catch (err) {
       setError(err.message || 'Could not deregister kiosk.');
     } finally {
@@ -218,7 +225,7 @@ export default function KiosksPage() {
                       <button
                         type="button"
                         className="ks__btn ks__btn--danger"
-                        onClick={() => handleDeregister(kiosk.uid)}
+                        onClick={() => setConfirmDeregister(kiosk)}
                         disabled={workingUid === kiosk.uid}
                       >
                         Deregister
@@ -248,6 +255,22 @@ export default function KiosksPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={Boolean(confirmDeregister)}
+        tone="danger"
+        title="Deregister this kiosk?"
+        message={
+          'The tablet will need to be set up again before it can take orders. '
+          + `${confirmDeregister?.name ? `"${confirmDeregister.name}" ` : 'This kiosk '}`
+          + 'stops working immediately.'
+        }
+        confirmLabel="Deregister"
+        workingLabel="Deregistering…"
+        working={Boolean(confirmDeregister) && workingUid === confirmDeregister.uid}
+        onConfirm={() => handleDeregister(confirmDeregister.uid)}
+        onClose={() => setConfirmDeregister(null)}
+      />
     </div>
   );
 }

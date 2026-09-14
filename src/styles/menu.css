@@ -90,5 +90,17 @@
   align-items: center;
 }
 
+/* The in-place rename row. Sits under the category heading it belongs to, and
+   keeps the buttons on the same line as the field so it reads as one control
+   rather than a new section appearing. */
+.menu__rename {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 0 4px 4px;
+}
+.menu__rename .input { flex: 1 1 200px; min-width: 0; }
+
 @media (max-width: 560px) { .menu__grid { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 400px) { .menu__grid { grid-template-columns: 1fr; } }

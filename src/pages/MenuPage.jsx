@@ -250,6 +250,10 @@ export default function MenuPage() {
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  // Which category is being renamed, and the value in its input. Renaming is a
+  // small edit on one screen, so it happens in place rather than in a dialog.
+  const [renaming, setRenaming] = useState('');
+  const [renameValue, setRenameValue] = useState('');
   const [modal, setModal] = useState(null); // { mode, category, itemKey, item }
   const [confirmDelete, setConfirmDelete] = useState(null); // { category, itemKey, item } | { category }
   const [logsOpen, setLogsOpen] = useState(false);
@@ -291,6 +295,14 @@ export default function MenuPage() {
     } finally {
       setBusy('');
     }
+  }
+
+  function submitRename(current) {
+    const next = renameValue.trim();
+    setRenaming('');
+    setRenameValue('');
+    if (!next || next === current) return;
+    run('rencat', () => renameCategory(branchId, current, next));
   }
 
   const totalItems = useMemo(
@@ -372,18 +384,15 @@ export default function MenuPage() {
                 </button>
                 {(canRenameCategory || canDeleteCategory) && (
                   <div className="flex gap-2">
-                    {canRenameCategory && (
+                    {canRenameCategory && renaming !== cat && (
                       <button
                         className="btn btn--ghost btn--sm"
-                        onClick={() => {
-                          const next = prompt(`Rename category "${cat}" to:`, cat);
-                          if (next && next !== cat) run('rencat', () => renameCategory(branchId, cat, next));
-                        }}
+                        onClick={() => { setRenaming(cat); setRenameValue(cat); setError(''); }}
                       >
                         <Pencil size={13} /> Rename
                       </button>
                     )}
-                    {canDeleteCategory && (
+                    {canDeleteCategory && renaming !== cat && (
                       <button className="btn btn--ghost btn--sm" style={{ color: 'var(--danger)' }} onClick={() => setConfirmDelete({ category: cat })}>
                         <Trash2 size={13} /> Delete
                       </button>
@@ -391,6 +400,40 @@ export default function MenuPage() {
                   </div>
                 )}
               </div>
+
+              {/* Renaming in place. This previously used window.prompt(), which is
+                  refused by any page inside a sandboxed frame and silently returns
+                  null in the Android WebView the kiosk uses — the button looked
+                  live and did nothing. An input also lets the name be checked here,
+                  where a bad one can be corrected, instead of after the fact. */}
+              {renaming === cat && (
+                <div className="menu__rename">
+                  <input
+                    className="input"
+                    value={renameValue}
+                    autoFocus
+                    aria-label={`New name for ${cat}`}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') submitRename(cat);
+                      if (e.key === 'Escape') { setRenaming(''); setRenameValue(''); }
+                    }}
+                  />
+                  <button
+                    className="btn btn--primary btn--sm"
+                    disabled={!renameValue.trim() || renameValue.trim() === cat || busy === 'rencat'}
+                    onClick={() => submitRename(cat)}
+                  >
+                    {busy === 'rencat' ? 'Renaming…' : 'Save'}
+                  </button>
+                  <button
+                    className="btn btn--ghost btn--sm"
+                    onClick={() => { setRenaming(''); setRenameValue(''); }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
 
               {!isCollapsed && (
                 Object.keys(items).length === 0 ? (

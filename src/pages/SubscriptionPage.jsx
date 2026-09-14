@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Check, Sparkles, Loader2 } from 'lucide-react';
 import { useBranchData } from '../context/BranchDataContext';
 import { useAuth } from '../context/AuthContext';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
 import {
   isSubscriptionActive,
   isTrialEndingSoon,
@@ -53,6 +54,10 @@ export default function SubscriptionPage() {
   // Billing is the company owner's call. Managers and staff can read what the
   // branch is on, which is useful when a feature is locked, but cannot change it.
   const canManageBilling = can(CAP.MANAGE_BILLING);
+  // Confirming in the page rather than through the browser. The dialog this used
+  // to call is refused in a sandboxed frame and returns false in the Android
+  // WebView, so the plan switch quietly did nothing there.
+  const [confirmDowngrade, setConfirmDowngrade] = useState(false);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState('');
 
@@ -76,9 +81,6 @@ export default function SubscriptionPage() {
 
   async function handleDowngrade() {
     if (!user?.uid || !branchId || !canManageBilling) return;
-    if (!window.confirm('Switch to the Free plan? AI features will be disabled immediately.')) {
-      return;
-    }
     setError('');
     setWorking(true);
     try {
@@ -88,6 +90,7 @@ export default function SubscriptionPage() {
       setError(err.message || 'Could not switch to the Free plan.');
     } finally {
       setWorking(false);
+      setConfirmDowngrade(false);
     }
   }
 
@@ -159,7 +162,7 @@ export default function SubscriptionPage() {
                     <button
                       type="button"
                       className="sub__btn sub__btn--ghost"
-                      onClick={handleDowngrade}
+                      onClick={() => setConfirmDowngrade(true)}
                       disabled={working}
                     >
                       {working ? <Loader2 size={16} className="sub__spin" /> : null}
@@ -173,7 +176,7 @@ export default function SubscriptionPage() {
                     <button
                       type="button"
                       className="sub__btn sub__btn--ghost"
-                      onClick={handleDowngrade}
+                      onClick={() => setConfirmDowngrade(true)}
                       disabled={working}
                     >
                       Switch to Free
@@ -213,6 +216,19 @@ export default function SubscriptionPage() {
           </tbody>
         </table>
       </section>
+
+      <ConfirmDialog
+        open={confirmDowngrade}
+        title="Switch to the Free plan?"
+        message={'The AI analyst, proactive insights and multi-kiosk management stop working '
+          + 'immediately. Your menu, orders and stock are not affected, and you can start '
+          + 'the trial again from this screen.'}
+        confirmLabel="Switch to Free"
+        workingLabel="Switching…"
+        working={working}
+        onConfirm={handleDowngrade}
+        onClose={() => setConfirmDowngrade(false)}
+      />
     </div>
   );
 }

@@ -390,6 +390,15 @@ img { max-width: 100%; display: block; }
 }
 .modal-panel--lg { max-width: 760px; }
 
+/* Body copy inside a confirmation. Same tone as the message it replaces in the
+   native dialog, but as a paragraph in the page rather than a browser popup. */
+.modal__message {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-2);
+  line-height: 1.6;
+}
+
 @media (max-width: 640px) {
   .modal-scrim { align-items: flex-end; padding: 0; }
   .modal-panel {
