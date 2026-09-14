@@ -6,6 +6,7 @@ import { ROLE, roleLabel, CAP } from '../lib/permissions';
 import { provisionAuthAccount } from '../lib/firebase';
 import { provisionTeamMember, removeTeamMember, loadBranchMembers } from '../lib/workspaceApi';
 import { managerHandoverNote, removalNote, removalLeavesBranchUnmanaged, unmanagedBranchWarning } from '../lib/teamNotices';
+import { branchLabel } from '../lib/branchLabel';
 import '../styles/team.css';
 
 const ROLE_CARDS = [

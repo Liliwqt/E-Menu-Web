@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { addBranchToWorkspace, loadWorkspace } from '../../lib/workspaceApi';
 import { CAP } from '../../lib/permissions';
+import { branchLabel } from '../../lib/branchLabel';
 
 export default function BranchSwitcher({ branchId, compact = false }) {
   const navigate = useNavigate();
