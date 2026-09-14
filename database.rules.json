@@ -156,6 +156,38 @@
             ".read": "auth != null && root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).exists()",
             ".write": "auth != null && root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).exists()"
           },
+          // Orders that should not count toward the roll-up: a duplicate, a test,
+          // a training run. This is an accounting adjustment, and it is kept
+          // beside the ledger rather than on it, so the order itself stays exactly
+          // as the kiosk wrote it. Putting the flag on the order would mean
+          // loosening the .write rule on /logs, which allows one thing only - a
+          // kiosk creating an order that does not yet exist. That rule is what
+          // makes the ledger immutable, and immutability is worth more than the
+          // convenience of writing the flag in place.
+          //
+          // Every member may read it, because excluding an order rebuilds the
+          // analytics document that every dashboard reads, so each session needs
+          // to apply the same flags. Setting one stays with the roles that answer
+          // for the numbers, and `by` is pinned to the writer so a flag always
+          // names the account that decided it.
+          "analyticsExclusions": {
+            ".read": "auth != null && root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).exists()",
+            "$orderId": {
+              ".write": "auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid || root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'manager')",
+              ".validate": "newData.hasChildren(['excluded', 'reason', 'at', 'by'])",
+              // Each allowed field is named here as well as checked above. The
+              // `$other` rule below matches every child that no sibling names, so
+              // without these a `$other: false` would reject 'excluded', 'reason',
+              // 'at' and 'by' along with the junk it is meant to catch - the
+              // hasChildren() check in the parent .validate does not exempt them.
+              // Same shape as the order node under /logs.
+              "excluded": { ".validate": "newData.isBoolean()" },
+              "reason": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 80" },
+              "at": { ".validate": "newData.isNumber()" },
+              "by": { ".validate": "newData.val() == auth.uid" },
+              "$other": { ".validate": false }
+            }
+          },
           // Restocking appends a history row. adjustStock() writes stock first and
           // the history row second without a try/catch, so a denial here surfaced
           // as a failed stock adjustment even though the stock change had landed.

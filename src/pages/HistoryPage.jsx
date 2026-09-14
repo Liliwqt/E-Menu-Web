@@ -65,14 +65,23 @@ export default function HistoryPage() {
 
   async function toggle(log) {
     if (!canCorrect) return;
+    // Keyed by orderId, the uuid. The list key is `orderNum`, which is the uuid
+    // while an order is live and the short order number once it has been moved to
+    // the bin — flagging by that would lose the flag the moment an order is
+    // trashed, which is exactly when someone is likely to be correcting things.
+    const orderId = log.orderId;
+    if (!orderId) {
+      setMessage(`Order #${log.orderNum} has no order id recorded, so it cannot be corrected.`);
+      return;
+    }
     setBusyId(log.orderNum);
     setMessage('');
     try {
       if (log.analyticsExcluded === true) {
-        await includeOrderInAnalytics(branchId, log.orderNum);
+        await includeOrderInAnalytics(branchId, orderId);
         setMessage(`Order #${log.orderNum} restored to analytics. Totals rebuilt.`);
       } else {
-        await excludeOrderFromAnalytics(branchId, log.orderNum, reason);
+        await excludeOrderFromAnalytics(branchId, orderId, reason);
         setMessage(`Order #${log.orderNum} excluded (${reason}). Totals rebuilt.`);
       }
       clearAnalysisCache(branchId);
@@ -91,7 +100,7 @@ export default function HistoryPage() {
           <p className="card-sub" style={{ margin: 0 }}>
             The ledger is the audit trail behind your analytics.{' '}
             {canCorrect
-              ? 'Excluding an order (duplicate, test, training) rebuilds every analytics total without deleting the record — you can restore it anytime.'
+              ? 'Excluding an order (duplicate, test, training) leaves it off every analytics total without deleting it — the record stays here, who excluded it and why are recorded, and you can restore it anytime.'
               : 'Your role can read it, but corrections are made by a branch manager or the business owner.'}
           </p>
         </div>
@@ -169,14 +178,14 @@ export default function HistoryPage() {
                     <td>
                       {!canCorrect ? (
                         <span className="muted">{excluded ? 'Excluded' : 'Counted'}</span>
-                      ) : log.orderSource === 'android_kiosk' ? (
-                        <span className="muted">Kiosk-managed</span>
                       ) : (
                         <button
                           className={`btn btn--sm ${excluded ? 'btn--secondary' : 'btn--ghost'}`}
                           onClick={() => toggle(log)}
                           disabled={busyId === log.orderNum}
-                          title={excluded ? `Excluded: ${log.analyticsExcludedReason || 'manual correction'}` : 'Exclude from analytics'}
+                          title={excluded
+                            ? `Excluded: ${log.analyticsExcludedReason || 'manual correction'}`
+                            : 'Exclude from analytics'}
                         >
                           {busyId === log.orderNum ? (
                             <span className="spinner" style={{ width: 14, height: 14 }} />

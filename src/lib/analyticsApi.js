@@ -11,12 +11,26 @@
  *   aiInsights (reserved), processedOrders, statistics
  */
 
-import { database, branchDataPath } from './firebase';
-import { ref, get, set, update, runTransaction, onValue, off } from 'firebase/database';
-import { calculateMean, calculateMedian, calculateMode } from './statisticsUtils';
+import { database, branchDataPath, auth } from './firebase.js';
+import { ref, get, set, remove, runTransaction, onValue, off, serverTimestamp } from 'firebase/database';
+import { calculateMean, calculateMedian, calculateMode } from './statisticsUtils.js';
+import { applyExclusions, countsTowardAnalytics, excludeOrder } from './analyticsExclusions.js';
+
+// Re-exported so the callers that already reach for them here keep working; the
+// implementations live in the pure module so they can be tested without a
+// database client.
+export { applyExclusions, excludeOrder };
 
 function analyticsPath(branchId, path) {
   return `${branchDataPath(branchId)}/analytics${path ? '/' + path : ''}`;
+}
+
+/**
+ * Orders deliberately left out of the roll-up live in their own node, beside the
+ * ledger rather than on it — see the rules for why.
+ */
+function exclusionsPath(branchId) {
+  return `${branchDataPath(branchId)}/analyticsExclusions`;
 }
 
 function createEmptyAnalytics() {
@@ -144,7 +158,9 @@ function getItemId(item) {
 
 export function isAnalyticsOrder(orderData) {
   if (!orderData || typeof orderData !== 'object') return false;
-  if (orderData.analyticsExcluded === true) return false;
+  // The exclusion decision lives in the pure module, so testing it tests the
+  // production predicate rather than a copy of it.
+  if (!countsTowardAnalytics(orderData)) return false;
   const status = String(orderData.status || '').toLowerCase();
   if (['cancelled', 'canceled', 'void', 'voided', 'refunded', 'deleted'].includes(status)) {
     return false;
@@ -247,15 +263,29 @@ function buildAnalyticsFromLogs(logsData = {}) {
 }
 
 async function getRecordedOrdersData(branchId) {
-  const [logsSnapshot, deletedLogsSnapshot] = await Promise.all([
+  const [logsSnapshot, deletedLogsSnapshot, exclusionsSnapshot] = await Promise.all([
     get(ref(database, `${branchDataPath(branchId)}/logs`)),
     get(ref(database, `${branchDataPath(branchId)}/deletedLogs`)),
+    // Degrades to no flags rather than failing the rebuild. An unreadable
+    // exclusions node should not stop the analytics document regenerating; the
+    // worst case is one rebuild that counts an order it was told to skip, and
+    // the next rebuild corrects it.
+    get(ref(database, exclusionsPath(branchId))).catch(() => null),
   ]);
 
-  return {
+  const exclusions = exclusionsSnapshot?.val() || {};
+  const orders = {
     ...(deletedLogsSnapshot.val() || {}),
     ...(logsSnapshot.val() || {}),
   };
+
+  // Folded in here so every downstream reader keeps seeing `analyticsExcluded`
+  // on the order, which is what isAnalyticsOrder() has always checked.
+  for (const [key, order] of Object.entries(orders)) {
+    orders[key] = excludeOrder(order, exclusions);
+  }
+
+  return orders;
 }
 
 function normalizeAnalytics(current) {
@@ -456,45 +486,50 @@ export async function rebuildAnalyticsFromLogs(branchId, logsData = null) {
   await set(ref(database, analyticsPath(branchId)), analytics);
 }
 
+/**
+ * Keeps an order out of the analytics roll-up without touching the order.
+ *
+ * This used to write a flag onto the order and refuse outright for kiosk orders,
+ * which meant it could never run: every order in production comes from a kiosk.
+ * The flag now lives in its own node, so the order stays exactly as the kiosk
+ * wrote it and the adjustment is recorded separately with who made it and why.
+ *
+ * @param {string} orderId the order's uuid, not its short order number
+ */
 export async function excludeOrderFromAnalytics(branchId, orderId, reason = 'Manual analytics correction') {
   if (!branchId || !orderId) return;
 
-  const now = new Date().toISOString();
-  const activeOrderSnapshot = await get(ref(database, `${branchDataPath(branchId)}/logs/${orderId}`));
-  if (activeOrderSnapshot.val()?.orderSource === 'android_kiosk') {
-    throw new Error('Kiosk orders are immutable; analytics corrections must use the reporting workflow.');
-  }
-  const orderPath = activeOrderSnapshot.exists()
-    ? `${branchDataPath(branchId)}/logs/${orderId}`
-    : `${branchDataPath(branchId)}/deletedLogs/${orderId}`;
-  const orderRef = ref(database, orderPath);
-  await update(orderRef, {
-    analyticsExcluded: true,
-    analyticsExcludedAt: now,
-    analyticsExcludedReason: reason || 'Manual analytics correction',
+  await set(ref(database, `${exclusionsPath(branchId)}/${orderId}`), {
+    excluded: true,
+    // Trimmed to the rule's limit rather than truncated silently mid-word by the
+    // database, which would reject the write instead of shortening it.
+    reason: String(reason || 'Manual analytics correction').trim().slice(0, 80),
+    at: serverTimestamp(),
+    by: auth.currentUser?.uid || '',
   });
 
   await rebuildAnalyticsFromLogs(branchId);
 }
 
+/** Puts the order back into the roll-up by lifting its flag. */
 export async function includeOrderInAnalytics(branchId, orderId) {
   if (!branchId || !orderId) return;
 
-  const activeOrderSnapshot = await get(ref(database, `${branchDataPath(branchId)}/logs/${orderId}`));
-  if (activeOrderSnapshot.val()?.orderSource === 'android_kiosk') {
-    throw new Error('Kiosk orders are immutable; analytics corrections must use the reporting workflow.');
-  }
-  const orderPath = activeOrderSnapshot.exists()
-    ? `${branchDataPath(branchId)}/logs/${orderId}`
-    : `${branchDataPath(branchId)}/deletedLogs/${orderId}`;
-  const orderRef = ref(database, orderPath);
-  await update(orderRef, {
-    analyticsExcluded: false,
-    analyticsExcludedAt: null,
-    analyticsExcludedReason: null,
-  });
+  await remove(ref(database, `${exclusionsPath(branchId)}/${orderId}`));
 
   await rebuildAnalyticsFromLogs(branchId);
+}
+
+/**
+ * Real-time listener for the exclusion flags. Returns an unsubscribe function.
+ * Members need this to apply the same flags the rebuild uses, since every
+ * dashboard reads the one analytics document.
+ */
+export function onAnalyticsExclusionsChange(branchId, callback) {
+  const exclusionsRef = ref(database, exclusionsPath(branchId));
+  const handler = (snapshot) => callback(snapshot.val() || {});
+  onValue(exclusionsRef, handler);
+  return () => off(exclusionsRef, 'value', handler);
 }
 
 /**

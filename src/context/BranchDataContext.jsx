@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { useAnalyticsProcessor } from '../hooks/useAnalyticsProcessor';
 import { useInventoryProcessor } from '../hooks/useInventoryProcessor';
-import { formatDateKey, formatWeekKey, formatMonthKey, onAnalyticsChange } from '../lib/analyticsApi';
+import { formatDateKey, formatWeekKey, formatMonthKey, onAnalyticsChange, onAnalyticsExclusionsChange, applyExclusions } from '../lib/analyticsApi';
 import { onMenuAndInventoryChange } from '../lib/inventoryApi';
 import { onLogsChange, onDeletedLogsChange } from '../lib/menuApi';
 import { detectPatterns } from '../lib/patternInsights';
@@ -28,6 +28,7 @@ export function BranchDataProvider({ branchId, children }) {
   const [logs, setLogs] = useState([]);
   const [logsLoaded, setLogsLoaded] = useState(false);
   const [deletedLogs, setDeletedLogs] = useState([]);
+  const [exclusions, setExclusions] = useState({});
 
   // Business-logic processors (identical to V1)
   useAnalyticsProcessor(branchId, true);
@@ -62,6 +63,22 @@ export function BranchDataProvider({ branchId, children }) {
     return onDeletedLogsChange(branchId, setDeletedLogs);
   }, [branchId]);
 
+  // Which orders are being left out of the roll-up. Held beside the orders and
+  // folded in below, so a screen reading `logs` sees the same picture the
+  // analytics rebuild used. Without this the ledger would show an excluded order
+  // as counted, and the button meant to restore it would offer to exclude it.
+  useEffect(() => {
+    if (!branchId) return undefined;
+    setExclusions({});
+    return onAnalyticsExclusionsChange(branchId, setExclusions);
+  }, [branchId]);
+
+  const logsWithExclusions = useMemo(() => applyExclusions(logs, exclusions), [logs, exclusions]);
+  const deletedLogsWithExclusions = useMemo(
+    () => applyExclusions(deletedLogs, exclusions),
+    [deletedLogs, exclusions]
+  );
+
   const currentKeys = useMemo(() => {
     const now = new Date();
     return { today: formatDateKey(now), week: formatWeekKey(now), month: formatMonthKey(now) };
@@ -71,8 +88,8 @@ export function BranchDataProvider({ branchId, children }) {
   // weekday effects, pairings, cadence, anomalies) — shown on the dashboard
   // and injected into every AI prompt so insights are grounded in evidence.
   const patterns = useMemo(
-    () => detectPatterns({ analytics: analytics || {}, logs, inventory }),
-    [analytics, logs, inventory]
+    () => detectPatterns({ analytics: analytics || {}, logs: logsWithExclusions, inventory }),
+    [analytics, logsWithExclusions, inventory]
   );
 
   // Shape consumed by every AI mode — V1's aiAnalyticsData plus detected patterns.
@@ -102,13 +119,13 @@ export function BranchDataProvider({ branchId, children }) {
     analyticsLoaded: analytics !== null,
     inventory,
     inventoryLoaded,
-    logs,
+    logs: logsWithExclusions,
     logsLoaded,
-    deletedLogs,
+    deletedLogs: deletedLogsWithExclusions,
     currentKeys,
     aiAnalyticsData,
     hasOrders: Number(analytics?.summary?.totalOrders || 0) > 0,
-  }), [branchId, analytics, inventory, inventoryLoaded, logs, logsLoaded, deletedLogs, currentKeys, aiAnalyticsData]);
+  }), [branchId, analytics, inventory, inventoryLoaded, logsWithExclusions, logsLoaded, deletedLogsWithExclusions, currentKeys, aiAnalyticsData]);
 
   return <BranchDataContext.Provider value={value}>{children}</BranchDataContext.Provider>;
 }
