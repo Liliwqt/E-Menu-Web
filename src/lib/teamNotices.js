@@ -1,3 +1,5 @@
+import { ROLE, normalizeRole } from './permissions.js';
+
 /**
  * Wording for what happened to the branch's previous manager.
  *
@@ -14,6 +16,32 @@ export function managerHandoverNote({ replacedManagerUid, replacedDemoted } = {}
     ? ' The branch\u2019s previous manager is now staff, because a branch has one manager.'
     : ' The branch\u2019s previous manager still holds the manager role \u2014 reload the page and '
       + 'remove them if they should not.';
+}
+
+/**
+ * Whether removing this member leaves the branch with nobody managing it.
+ *
+ * A branch has one manager, so this is true when the member being removed is the
+ * only one on the roster. It is not an error state — a branch with no manager is
+ * what every business starts with, and its owner takes over — but the owner is
+ * about to do it as a side effect of removing a person, so it is worth naming.
+ */
+export function removalLeavesBranchUnmanaged({ member, members = [] } = {}) {
+  if (normalizeRole(member?.role) !== ROLE.MANAGER) return false;
+  return !members.some(
+    (other) => other.uid !== member.uid && normalizeRole(other.role) === ROLE.MANAGER
+  );
+}
+
+/**
+ * Wording for the branch losing its manager.
+ *
+ * Says what still works, because the alternative reading — that the branch is now
+ * stuck — would stop an owner from removing a manager who has left the company.
+ */
+export function unmanagedBranchWarning({ branchName } = {}) {
+  return `This is the only manager on ${branchName || 'this branch'}. Removing them leaves it `
+    + 'without one, and running it falls back to you until another manager is appointed.';
 }
 
 /**

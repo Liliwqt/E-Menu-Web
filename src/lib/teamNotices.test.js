@@ -1,6 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { managerHandoverNote, removalNote } from './teamNotices.js';
+import { ROLE } from './permissions.js';
+import {
+  managerHandoverNote,
+  removalNote,
+  removalLeavesBranchUnmanaged,
+  unmanagedBranchWarning,
+} from './teamNotices.js';
+
+const member = (uid, role) => ({ uid, role });
 
 test('says nothing when no manager was replaced', () => {
   assert.equal(managerHandoverNote({}), '');
@@ -41,4 +49,47 @@ test('a leftover sign-in record is described as access already gone, not access 
   const note = removalNote({ accountRemoved: false });
   assert.match(note, /sign-in record could not be cleared/);
   assert.doesNotMatch(note, /still has access|access to this branch/i);
+});
+
+test('warns only when the branch is about to lose its last manager', () => {
+  const only = { member: member('m1', ROLE.MANAGER), members: [member('m1', ROLE.MANAGER), member('s1', ROLE.STAFF)] };
+  assert.equal(removalLeavesBranchUnmanaged(only), true);
+
+  const oneOfTwo = {
+    member: member('m1', ROLE.MANAGER),
+    members: [member('m1', ROLE.MANAGER), member('m2', ROLE.MANAGER)],
+  };
+  assert.equal(removalLeavesBranchUnmanaged(oneOfTwo), false);
+});
+
+test('removing staff or the owner never triggers the warning', () => {
+  const staff = { member: member('s1', ROLE.STAFF), members: [member('o1', ROLE.OWNER), member('s1', ROLE.STAFF)] };
+  assert.equal(removalLeavesBranchUnmanaged(staff), false);
+
+  const owner = { member: member('o1', ROLE.OWNER), members: [member('o1', ROLE.OWNER)] };
+  assert.equal(removalLeavesBranchUnmanaged(owner), false);
+});
+
+test('a manager is recognised through the same normalisation the rest of the app uses', () => {
+  // The role is hand-edited in the console sometimes and picks up stray case or
+  // space; treating that as "not the manager" would drop the warning silently.
+  const messy = {
+    member: { uid: 'm1', role: ' Manager ' },
+    members: [{ uid: 'm1', role: 'Manager' }, { uid: 's1', role: ROLE.STAFF }],
+  };
+  assert.equal(removalLeavesBranchUnmanaged(messy), true);
+});
+
+test('the warning says who covers the branch instead of implying it is stuck', () => {
+  const warning = unmanagedBranchWarning({ branchName: 'branch1' });
+  assert.match(warning, /branch1/);
+  assert.match(warning, /only manager/);
+  assert.match(warning, /falls back to you/);
+  assert.doesNotMatch(warning, /cannot|unable|blocked/i);
+});
+
+test('no warning is rendered from an empty or partial state', () => {
+  assert.equal(removalLeavesBranchUnmanaged({}), false);
+  assert.equal(removalLeavesBranchUnmanaged(), false);
+  assert.equal(removalLeavesBranchUnmanaged({ member: member('m1', ROLE.MANAGER) }), true);
 });

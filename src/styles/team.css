@@ -308,6 +308,19 @@
   line-height: 1.6;
 }
 
+/* A consequence of the action, not a failure of it: quieter than the danger
+   colour, but distinct from the grey hint text so it is read before confirming. */
+.team__warning {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  border-left: 3px solid var(--warning, #d97706);
+  background: var(--surface-3);
+  font-size: var(--text-sm);
+  color: var(--text-1);
+  line-height: 1.55;
+}
+
 .team__dialogFooter {
   display: flex;
   justify-content: flex-end;

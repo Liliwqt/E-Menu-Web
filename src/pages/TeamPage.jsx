@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { ROLE, roleLabel, CAP } from '../lib/permissions';
 import { provisionAuthAccount } from '../lib/firebase';
 import { provisionTeamMember, removeTeamMember, loadBranchMembers } from '../lib/workspaceApi';
-import { managerHandoverNote, removalNote } from '../lib/teamNotices';
+import { managerHandoverNote, removalNote, removalLeavesBranchUnmanaged, unmanagedBranchWarning } from '../lib/teamNotices';
 import '../styles/team.css';
 
 const ROLE_CARDS = [
@@ -370,6 +370,11 @@ export default function TeamPage() {
               <strong>{confirmRemove.email || 'This account'}</strong> will lose access to
               {' '}{branchName} and will not be able to sign in to any branch.
             </p>
+            {removalLeavesBranchUnmanaged({ member: confirmRemove, members }) && (
+              <p className="team__warning" role="status">
+                {unmanagedBranchWarning({ branchName })}
+              </p>
+            )}
             <p className="team__hint">
               Their order and stock history stays intact. The sign-in account itself must be
               removed in the Firebase console before the same email can be reused.
