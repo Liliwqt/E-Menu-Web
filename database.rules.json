@@ -58,7 +58,7 @@
     "kioskEnrollments": {
       "$kioskUid": {
         ".read": "auth != null && auth.uid == $kioskUid",
-        ".write": "auth != null && newData.child('companyId').isString() && newData.child('branchId').isString() && root.child(newData.child('companyId').val()).child('branches').child(newData.child('branchId').val()).child('branchProfile').child('ownerUid').val() == auth.uid",
+        ".write": "auth != null && newData.child('companyId').isString() && newData.child('branchId').isString() && (root.child(newData.child('companyId').val()).child('branches').child(newData.child('branchId').val()).child('branchProfile').child('ownerUid').val() == auth.uid || root.child(newData.child('companyId').val()).child('branches').child(newData.child('branchId').val()).child('branchProfile').child('managerUid').val() == auth.uid)",
         ".validate": "newData.hasChildren(['companyId', 'branchId', 'isActive']) && !newData.hasChild('kioskUid') && newData.child('companyId').val().matches(/^company-[a-z0-9-]+$/) && newData.child('branchId').val().matches(/^branch-[a-z0-9-]+$/) && newData.child('isActive').isBoolean()"
       }
     },
@@ -73,7 +73,10 @@
       "kioskEnrollments": {
         "$kioskUid": {
           ".read": "auth != null && (auth.uid == $kioskUid || root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || root.child($companyId).child('users').child(auth.uid).exists())",
-          ".write": "auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || root.child($companyId).child('branches').child(newData.child('branchId').val()).child('branchProfile').child('ownerUid').val() == auth.uid)",
+          // The branch that the enrollment names is the one whose owner and manager
+          // may write it, so an enrollment cannot be pointed at a branch the writer
+          // does not run.
+          ".write": "auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || root.child($companyId).child('branches').child(newData.child('branchId').val()).child('branchProfile').child('ownerUid').val() == auth.uid || root.child($companyId).child('branches').child(newData.child('branchId').val()).child('branchProfile').child('managerUid').val() == auth.uid)",
           ".validate": "newData.hasChildren(['kioskUid', 'companyId', 'branchId', 'isActive', 'name', 'registeredAt']) && newData.child('kioskUid').val() == $kioskUid && newData.child('companyId').val() == $companyId && newData.child('branchId').val().matches(/^branch-[a-z0-9-]+$/) && newData.child('isActive').isBoolean() && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 60 && newData.child('registeredAt').isNumber()"
         }
       },
@@ -124,7 +127,11 @@
           "kiosks": {
             "$kioskUid": {
               ".read": "auth != null && (auth.uid == $kioskUid || root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).exists())",
-              ".write": "auth != null && (auth.uid == $kioskUid || root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid)",
+              // Running a branch includes the tablets in it, so the branch's own
+              // manager may manage devices alongside the owner. Scoped to this
+              // branch by position in the tree: the managerUid has to match the
+              // branch whose kiosks node this is.
+              ".write": "auth != null && (auth.uid == $kioskUid || root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid || root.child($companyId).child('branches').child($branchId).child('branchProfile').child('managerUid').val() == auth.uid)",
               ".validate": "newData.hasChildren(['kioskUid', 'name', 'isActive']) && newData.child('kioskUid').val() == $kioskUid && newData.child('name').isString() && newData.child('isActive').isBoolean()"
             }
           },
