@@ -1,6 +1,7 @@
 import { pilotAiConfig } from './pilotAiConfig';
 import { fetchWithAppCheck } from './firebase';
 import { buildSystemPrompt, buildDataPrompt, parseModelJson } from './aiPrompts';
+import { describeAiFailure } from './aiFailure';
 
 const CACHE_KEY_PREFIX = 'ai_analyst_cache_v2_';
 
@@ -67,33 +68,42 @@ async function requestAnalysis(analyticsData, mode, branchId) {
 
   // fetchWithAppCheck attaches the signed-in user's Firebase ID token, which FastAPI verifies
   // before it forwards to OpenAI with the server-held key.
-  const response = await fetchWithAppCheck(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: dataPrompt },
-      ],
-      response_format: { type: 'json_object' },
-      max_tokens: MODE_MAX_TOKENS[mode] || 350,
-      temperature: MODE_MAX_TOKENS[mode] ? 0.45 : 0.35,
-    }),
-  });
+  let response;
+  try {
+    response = await fetchWithAppCheck(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: dataPrompt },
+        ],
+        response_format: { type: 'json_object' },
+        max_tokens: MODE_MAX_TOKENS[mode] || 350,
+        temperature: MODE_MAX_TOKENS[mode] ? 0.45 : 0.35,
+      }),
+    });
+  } catch (err) {
+    // The service did not answer. The browser's own wording for this is
+    // "Failed to fetch", which says nothing useful, so the console keeps the
+    // technical version and the caller gets something the reader can act on.
+    console.error('[AI Analysis] request did not complete:', err);
+    throw new Error(describeAiFailure({ error: err }));
+  }
 
   if (!response.ok) {
     let errorDetail = '';
     try {
       const errData = await response.json();
-      errorDetail = errData?.error?.message || JSON.stringify(errData);
+      errorDetail = errData?.error?.message || errData?.message || JSON.stringify(errData);
     } catch {
       errorDetail = `HTTP ${response.status}`;
     }
-    console.error('[AI Analysis] OpenAI API error:', errorDetail);
-    throw new Error(`AI analysis failed: ${errorDetail}`);
+    console.error('[AI Analysis] backend refused the request:', response.status, errorDetail);
+    throw new Error(describeAiFailure({ status: response.status, detail: errorDetail }));
   }
 
   const data = await response.json();
