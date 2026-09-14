@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { ROLE, roleLabel, CAP } from '../lib/permissions';
 import { provisionAuthAccount } from '../lib/firebase';
 import { provisionTeamMember, removeTeamMember, loadBranchMembers } from '../lib/workspaceApi';
+import { managerHandoverNote } from '../lib/teamNotices';
 import '../styles/team.css';
 
 const ROLE_CARDS = [
@@ -98,7 +99,7 @@ export default function TeamPage() {
       // it a home. A failure after stage one leaves an unusable auth account, not
       // a half-built membership — safe to retry with a different email.
       const memberUid = await provisionAuthAccount(email, password);
-      await provisionTeamMember({
+      const { replacedManagerUid, replacedDemoted } = await provisionTeamMember({
         ownerUid: user?.uid,
         companyId,
         branchId,
@@ -112,7 +113,8 @@ export default function TeamPage() {
       setAddOpen(false);
       setNotice(
         `${name} can now sign in at any device with ${email}. ` +
-        'Share the temporary password, then have them change it in Account settings.'
+        'Share the temporary password, then have them change it in Account settings.' +
+        managerHandoverNote({ replacedManagerUid, replacedDemoted })
       );
       await refresh();
     } catch (err) {

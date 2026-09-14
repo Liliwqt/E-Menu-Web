@@ -644,11 +644,46 @@ function assertTeamRole(role) {
 }
 
 /**
+ * Steps a replaced manager down to staff.
+ *
+ * Role is read from three records, so all three have to move together. Leaving
+ * any one behind leaves the old role in force: the branch roster is what the
+ * rules read for menu, settings and threshold writes, and the company record is
+ * what resolveRole() reads at sign-in. Either one alone is enough to keep the
+ * capabilities the owner believed they had taken away.
+ *
+ * Returns false when a record could not be changed, so the caller can say so
+ * rather than report a clean replacement that did not happen.
+ */
+async function demoteBranchManager({ companyId, branchId, memberUid }) {
+  const results = await Promise.allSettled([
+    update(ref(database, `${companyId}/branches/${branchId}/users/${memberUid}`), {
+      role: 'staff',
+      updatedAt: serverTimestamp(),
+    }),
+    update(ref(database, `${companyId}/users/${memberUid}`), {
+      role: 'staff',
+      companyRole: 'staff',
+      updatedAt: serverTimestamp(),
+    }),
+    update(ref(database, `accounts/${memberUid}`), {
+      role: 'staff',
+      updatedAt: serverTimestamp(),
+    }),
+  ]);
+  return results.every((result) => result.status === 'fulfilled');
+}
+
+/**
  * Provisions a branch manager or staff member.
  *
  * `provisionAuthAccount` must have already created the Firebase Auth user; this
  * function only writes data. Keeping the two apart means a failed database write
  * leaves an orphaned auth user (recoverable) rather than a half-built membership.
+ *
+ * A manager replaces the branch's existing manager, who steps down to staff. The
+ * return value reports whether that handover completed, so the caller can say so
+ * instead of implying the old manager's access is gone when it is not.
  */
 export async function provisionTeamMember({
   ownerUid,
@@ -670,10 +705,24 @@ export async function provisionTeamMember({
   const name = cleanText(displayName, 80);
   const memberEmail = cleanText(email, 160);
 
+  // A branch has one manager, and branchProfile/managerUid is the record the
+  // rules read to decide who may enrol kiosks and add staff.
+  let replacedManagerUid = null;
+
   if (role === 'manager') {
-    // One manager per branch: record the incumbent before the membership row, so
-    // the branch always advertises who manages it.
-    await set(ref(database, `${companyId}/branches/${branchId}/branchProfile/managerUid`), memberUid);
+    // Read the incumbent before overwriting it — afterwards it reads back as the
+    // member being added. A read that fails is treated as "no manager", because
+    // refusing to add a manager at all is the worse outcome.
+    const managerRef = ref(database, `${companyId}/branches/${branchId}/branchProfile/managerUid`);
+    const incumbent = await get(managerRef)
+      .then((snap) => (snap.exists() ? snap.val() : null))
+      .catch(() => null);
+
+    if (incumbent && incumbent !== memberUid) replacedManagerUid = incumbent;
+
+    // Recorded before the membership row, so the branch always advertises who
+    // manages it.
+    await set(managerRef, memberUid);
   }
 
   await set(ref(database, `${companyId}/branches/${branchId}/users/${memberUid}`), {
@@ -733,7 +782,14 @@ export async function provisionTeamMember({
     updatedAt: now,
   });
 
-  return memberUid;
+  // The handover happens after the new manager can sign in. A failure here leaves
+  // the branch with two managers rather than none, which the caller reports — a
+  // branch with no manager at all would be the harder failure to recover from.
+  const replacedDemoted = replacedManagerUid
+    ? await demoteBranchManager({ companyId, branchId, memberUid: replacedManagerUid })
+    : false;
+
+  return { memberUid, replacedManagerUid, replacedDemoted };
 }
 
 /**
