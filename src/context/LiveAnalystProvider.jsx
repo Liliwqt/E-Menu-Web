@@ -24,7 +24,7 @@ import {
   useRef,
 } from 'react';
 import { useAuth } from './AuthContext';
-import { AUTH_CONFIG } from '../config/authConfig';
+import { branchLabel as branchNameFor } from '../lib/branchLabel';
 import { generateAIAnalysis, clearAnalysisCache } from '../lib/aiAnalystService';
 import { useAiAccess } from '../hooks/useAiAccess';
 
@@ -126,16 +126,6 @@ function timeOfDayLabel() {
   return 'Evening';
 }
 
-function formatBranchLabel(branchId) {
-  const cfg = AUTH_CONFIG.branches?.[branchId];
-  if (cfg?.name) return cfg.name;
-  const match = String(branchId || '').match(/^branch(\d+)$/i);
-  if (match) return `Branch ${match[1]}`;
-  return String(branchId || 'this branch')
-    .replace(/[_-]+/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
 export function LiveAnalystProvider({ children }) {
   const { user, isAuthenticated, nicknameLoaded, nickname, workspace } = useAuth();
   const [state, dispatch] = useReducer(reducer, null, createInitialState);
@@ -170,7 +160,7 @@ export function LiveAnalystProvider({ children }) {
   }, [workspace]);
 
   const branchLabel = useMemo(
-    () => workspace?.branchId === activeBranch ? workspace.branchName : formatBranchLabel(activeBranch),
+    () => branchNameFor({ workspace, branchId: activeBranch }),
     [activeBranch, workspace]
   );
 

@@ -4,7 +4,7 @@ import AppShell from '../components/layout/AppShell';
 import { AreaChart, DonutChart, RankedBars } from '../components/ui/charts';
 import { useBranchData } from '../context/BranchDataContext';
 import { useAuth } from '../context/AuthContext';
-import { AUTH_CONFIG } from '../config/authConfig';
+import { branchLabel } from '../lib/branchLabel';
 import { formatCurrency, formatNumber } from '../lib/statisticsUtils';
 import { formatDateKey } from '../lib/analyticsApi';
 import {
@@ -32,7 +32,7 @@ export default function ReportsPage() {
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState('');
 
-  const branchName = AUTH_CONFIG.branches[branchId]?.name || branchId;
+  const branchName = branchLabel({ workspace, branchId });
   const range = RANGES.find((r) => r.key === rangeKey) || RANGES[0];
 
   const view = useMemo(() => {

@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useBranchData } from '../../context/BranchDataContext';
 import { useAuth } from '../../context/AuthContext';
-import { AUTH_CONFIG } from '../../config/authConfig';
+import { branchLabel as branchNameFor } from '../../lib/branchLabel';
 import AnimatedNumber from '../ui/AnimatedNumber';
 import Sparkline from '../ui/Sparkline';
 import { BarChart, HourHeatStrip, RankedBars } from '../ui/charts';
@@ -28,7 +28,7 @@ const AUTOPLAY_MS = 9000;
  */
 export default function ExecutivePresentation({ open, onClose }) {
   const { branchId, analytics, logs, inventory, aiAnalyticsData } = useBranchData();
-  const { nickname, user } = useAuth();
+  const { nickname, user, workspace } = useAuth();
   const [ai, setAi] = useState(null);
   const [aiError, setAiError] = useState(false);
   const [scene, setScene] = useState(-1); // -1 = loading/title
@@ -36,7 +36,7 @@ export default function ExecutivePresentation({ open, onClose }) {
   const [elapsed, setElapsed] = useState(0);
   const timerRef = useRef(null);
 
-  const branchLabel = AUTH_CONFIG.branches[branchId]?.name || branchId;
+  const branchLabel = branchNameFor({ workspace, branchId });
   const managerNickname = nickname || user?.email?.split('@')[0] || 'Manager';
 
   // Deterministic data for every scene

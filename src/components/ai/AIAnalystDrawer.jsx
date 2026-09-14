@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Sparkles, SendHorizonal, X, Sunrise, SearchCheck, FlaskConical, Radio } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useBranchData } from '../../context/BranchDataContext';
-import { AUTH_CONFIG } from '../../config/authConfig';
+import { branchLabel as branchNameFor } from '../../lib/branchLabel';
 import { generateAIAnalysis } from '../../lib/aiAnalystService';
 import '../../styles/ai.css';
 
@@ -111,7 +111,7 @@ function loadChat(branchId) {
 }
 
 export default function AIAnalystDrawer({ open, onClose, initialAction = null }) {
-  const { nickname, user } = useAuth();
+  const { nickname, user, workspace } = useAuth();
   const { branchId, aiAnalyticsData, hasOrders } = useBranchData();
   const [messages, setMessages] = useState(() => loadChat(branchId));
   const [input, setInput] = useState('');
@@ -167,9 +167,8 @@ export default function AIAnalystDrawer({ open, onClose, initialAction = null })
 
   const isCooldown = !!usageState.cooldownUntil;
 
-  const branchLabel = AUTH_CONFIG.branches[branchId]?.name || branchId;
+  const branchLabel = branchNameFor({ workspace, branchId });
   const managerNickname = nickname || user?.email?.split('@')[0] || 'Manager';
-
   useEffect(() => {
     if (open) {
       setMessages((prev) => prev.length > 0 ? prev : [{

@@ -29,12 +29,12 @@ export default function BranchSwitcher({ branchId, compact = false }) {
     : workspace?.branchId
       ? [{
         branchId: workspace.branchId,
-        name: workspace.branchName || workspace.branchId,
+        name: branchLabel({ workspace, branchId: workspace.branchId }),
         location: workspace.location || '',
       }]
       : [];
   const activeBranch = branches.find((branch) => branch.branchId === branchId);
-  const activeName = activeBranch?.name || workspace?.branchName || branchId;
+  const activeName = activeBranch?.name || branchLabel({ workspace, branchId });
 
   // Re-read the workspace from the DB each time the switcher opens so manual
   // database changes (e.g. admin deletes a branch) are reflected immediately.

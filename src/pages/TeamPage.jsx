@@ -33,7 +33,7 @@ export default function TeamPage() {
   const { user, workspace, can, role } = useAuth();
 
   const companyId = workspace?.companyId;
-  const branchName = workspace?.branchName || branchId;
+  const branchName = branchLabel({ workspace, branchId });
   const canAddStaff = can(CAP.MANAGE_STAFF);
   const canAddManager = can(CAP.MANAGE_MANAGERS);
 

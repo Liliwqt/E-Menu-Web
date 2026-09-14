@@ -15,11 +15,14 @@
  * branch scoping entirely and granted owner rights everywhere. It existed to seed
  * the first production owner, which onboarding now does properly, so it was a
  * single-address backdoor in a public repository with nothing left to justify it.
+ *
+ * An `AUTH_CONFIG.branches` map of id-to-name used to sit alongside it. Removing
+ * the administrator emptied it, but the screens kept reading it —
+ * `AUTH_CONFIG.branches[id]?.name || id` — so the lookup always missed and every
+ * branch was captioned with its machine id. Names now come from the workspace,
+ * which is where they are actually stored (see lib/branchLabel.js), and the empty
+ * map is gone rather than left as a trap for the next reader.
  */
-export const AUTH_CONFIG = {
-  branches: {},
-};
-
 export function getUserBranch(workspace) {
   if (!workspace?.onboardingComplete || !workspace.companyId) return null;
   const branchId = workspace.branchId;

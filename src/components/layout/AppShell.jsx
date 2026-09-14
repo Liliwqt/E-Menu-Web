@@ -9,7 +9,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useBranchData } from '../../context/BranchDataContext';
 import { useLiveAnalyst } from '../../context/LiveAnalystProvider';
-import { AUTH_CONFIG } from '../../config/authConfig';
+import { branchLabel } from '../../lib/branchLabel';
 import { useAiAccess } from '../../hooks/useAiAccess';
 import { isEmbeddedInKiosk, enterKioskMode, getDeviceUid } from '../../lib/kioskBridge';
 import { CAP, roleLabel } from '../../lib/permissions';
@@ -95,9 +95,7 @@ export default function AppShell({ children, title }) {
   }, [aiEnabled]);
 
   const activeKey = activeKeyFor(location.pathname);
-  const branchName = workspace?.branchId === branchId
-    ? workspace.branchName
-    : AUTH_CONFIG.branches[branchId]?.name || branchId;
+  const branchName = branchLabel({ workspace, branchId });
   const displayName = nickname || user?.email?.split('@')[0] || 'Manager';
   const initials = displayName.slice(0, 2).toUpperCase();
   const embeddedInKiosk = isEmbeddedInKiosk();
