@@ -173,6 +173,20 @@ img { max-width: 100%; display: block; }
 
 .pill-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 
+/* A partial success: the main action completed, but something about it did not.
+   Deliberately not the error colour — nothing failed as far as the reader's
+   request goes, and colouring it red would read as "your change was not saved"
+   when it was. */
+.notice {
+  padding: 10px 14px;
+  border-radius: var(--r-md);
+  border-left: 3px solid var(--warning, #d97706);
+  background: var(--surface-3);
+  font-size: var(--text-sm);
+  color: var(--text-1);
+  line-height: 1.55;
+}
+
 /* Numeric data */
 .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 

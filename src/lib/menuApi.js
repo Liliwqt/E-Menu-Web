@@ -1,9 +1,53 @@
 import { fetchWithAppCheck, dbUrl as baseDbUrl, branchDataPath, auth } from './firebase';
+import {
+  MENU_INVENTORY_OP,
+  inventoryCleanupPlan,
+  mergeRenamedInventory,
+} from './menuInventorySync.js';
 
 // Builds a branch-scoped REST path for fetchWithAppCheck.
 function dbUrl(path, branchId) {
   const finalPath = branchId ? `${branchDataPath(branchId)}/${path}` : path;
   return baseDbUrl(finalPath);
+}
+
+/**
+ * A database write that reports being refused.
+ *
+ * fetchWithAppCheck() resolves for every HTTP status, so a write turned down by
+ * the rules is indistinguishable from one that worked: nothing throws, the promise
+ * resolves, and the screen reports the change. Every mutation in this file ignored
+ * the response, so "the database refused this" was displayed as success.
+ *
+ * That is the same mismatch between what the UI offers and what the rules allow
+ * that has caused several bugs here, except silent — and worst on the destructive
+ * actions, where believing a delete happened when it did not is the difference
+ * between a tidied menu and one nobody can correct.
+ *
+ * Reads deliberately keep calling fetchWithAppCheck directly: a node that is not
+ * there is an ordinary answer, not a failure.
+ */
+async function menuWrite(url, options = {}) {
+  const res = await fetchWithAppCheck(url, options);
+  if (res.ok) return res;
+
+  let detail = '';
+  try {
+    const body = await res.json();
+    detail = body?.error || '';
+  } catch {
+    // No JSON body; the status on its own will have to do.
+  }
+
+  const refused = res.status === 401 || res.status === 403;
+  const error = new Error(
+    refused
+      ? 'The database refused this change — this account may not have permission for it.'
+      : `The change could not be saved (HTTP ${res.status}).`
+  );
+  error.status = res.status;
+  error.detail = detail;
+  throw error;
 }
 
 /**
@@ -58,7 +102,7 @@ export async function addCategory(branchId, categoryName) {
 
   // We write a placeholder to ensure the key exists even with no items.
   // Firebase deletes keys with no children, so we add a metadata child.
-  await fetchWithAppCheck(dbUrl(`categories/${name}`, branchId), {
+  await menuWrite(dbUrl(`categories/${name}`, branchId), {
     method: 'PUT',
     body: JSON.stringify({ _createdAt: Date.now() }),
     headers: { 'Content-Type': 'application/json' },
@@ -66,10 +110,76 @@ export async function addCategory(branchId, categoryName) {
   await addMenuLog(branchId, `Added category: ${name}`);
 }
 
+/**
+ * Carries out a menu change's effect on the stock tree.
+ *
+ * `inventory/<category>/<item>` sits beside `categories/<category>/<item>` rather
+ * than inside it, so nothing about a menu edit removes the matching stock by
+ * itself. Which paths an operation touches is decided in menuInventorySync.js,
+ * where it can be asserted without a database; this only performs it.
+ *
+ * Failures are reported, not thrown. The caller asked to change the menu, and it
+ * has already happened by the time this runs, so failing the whole action would
+ * report that nothing happened when something did. The leftover is visible on the
+ * Inventory screen, so the caller passes the result on to the reader rather than
+ * swallowing it.
+ */
+async function applyInventoryCleanup(branchId, plan) {
+  let cleared = true;
+
+  const attempt = async (label, fn) => {
+    try {
+      await fn();
+    } catch (error) {
+      cleared = false;
+      console.error(`[menuApi] inventory ${label} failed:`, error);
+    }
+  };
+
+  if (plan.move) {
+    await attempt(`move ${plan.move.from} -> ${plan.move.to}`, async () => {
+      const fromRes = await fetchWithAppCheck(dbUrl(plan.move.from, branchId));
+      const moved = await fromRes.json();
+      const toRes = await fetchWithAppCheck(dbUrl(plan.move.to, branchId));
+      const existing = await toRes.json();
+
+      const merged = mergeRenamedInventory({
+        existing: existing && !existing.error ? existing : null,
+        moved: moved && !moved.error ? moved : null,
+      });
+      // Null means there was nothing to move, so the destination is left exactly
+      // as it is rather than being overwritten with an empty node.
+      if (!merged) return;
+
+      await menuWrite(dbUrl(plan.move.to, branchId), {
+        method: 'PUT',
+        body: JSON.stringify(merged),
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+  }
+
+  for (const path of plan.remove) {
+    await attempt(`clear ${path}`, () => (
+      menuWrite(dbUrl(path, branchId), { method: 'DELETE' })
+    ));
+  }
+
+  return cleared;
+}
+
 export async function removeCategory(branchId, categoryName) {
   validateCategoryName(categoryName);
-  await fetchWithAppCheck(dbUrl(`categories/${categoryName}`, branchId), { method: 'DELETE' });
+  await menuWrite(dbUrl(`categories/${categoryName}`, branchId), { method: 'DELETE' });
+  // Takes the category's stock with it. Deleting the menu side alone leaves the
+  // inventory screen still offering the category, with nothing on the menu to
+  // explain where it came from.
+  const inventoryCleared = await applyInventoryCleanup(
+    branchId,
+    inventoryCleanupPlan({ op: MENU_INVENTORY_OP.CATEGORY_DELETE, category: categoryName })
+  );
   await addMenuLog(branchId, `Removed category: ${categoryName}`);
+  return { inventoryCleared };
 }
 
 export async function renameCategory(branchId, oldName, newName) {
@@ -86,14 +196,28 @@ export async function renameCategory(branchId, oldName, newName) {
   const payload = data || { _createdAt: Date.now() };
 
   // 2. Write to new key
-  await fetchWithAppCheck(dbUrl(`categories/${trimmedNew}`, branchId), {
+  await menuWrite(dbUrl(`categories/${trimmedNew}`, branchId), {
     method: 'PUT',
     body: JSON.stringify(payload),
     headers: { 'Content-Type': 'application/json' },
   });
 
   // 3. Delete old key
-  await fetchWithAppCheck(dbUrl(`categories/${oldName}`, branchId), { method: 'DELETE' });
+  await menuWrite(dbUrl(`categories/${oldName}`, branchId), { method: 'DELETE' });
+
+  // 4. Take the stock with it. Stock is keyed by category name, so leaving it
+  // under the old name disconnects it: the renamed category is handed fresh
+  // default rows by the inventory sync, while the real counts sit under a heading
+  // that no longer exists on the menu.
+  await applyInventoryCleanup(
+    branchId,
+    inventoryCleanupPlan({
+      op: MENU_INVENTORY_OP.CATEGORY_RENAME,
+      category: oldName,
+      newCategory: trimmedNew,
+    })
+  );
+
   await addMenuLog(branchId, `Renamed category: ${oldName} → ${trimmedNew}`);
 }
 
@@ -103,7 +227,7 @@ export async function addItemToFirebase(branchId, category, itemId, item) {
     available: item.available !== false,
   };
 
-  await fetchWithAppCheck(dbUrl(`categories/${category}/${itemId}`, branchId), {
+  await menuWrite(dbUrl(`categories/${category}/${itemId}`, branchId), {
     method: 'PUT',
     body: JSON.stringify(menuItem),
     headers: { 'Content-Type': 'application/json' },
@@ -126,7 +250,7 @@ export async function addItemToFirebase(branchId, category, itemId, item) {
       };
     });
     
-    await fetchWithAppCheck(dbUrl(`inventory/${category}/${itemId}/sizes`, branchId), {
+    await menuWrite(dbUrl(`inventory/${category}/${itemId}/sizes`, branchId), {
       method: 'PUT',
       body: JSON.stringify(defaultSizes),
       headers: { 'Content-Type': 'application/json' },
@@ -137,22 +261,34 @@ export async function addItemToFirebase(branchId, category, itemId, item) {
 }
 
 export async function deleteItem(branchId, category, itemKey) {
-  await fetchWithAppCheck(dbUrl(`categories/${category}/${itemKey}`, branchId), { method: 'DELETE' });
+  await menuWrite(dbUrl(`categories/${category}/${itemKey}`, branchId), { method: 'DELETE' });
+
+  // The stock row goes with the item it describes. It is keyed separately, so
+  // nothing here happens by itself — see applyInventoryCleanup().
+  const inventoryCleared = await applyInventoryCleanup(
+    branchId,
+    inventoryCleanupPlan({
+      op: MENU_INVENTORY_OP.ITEM_DELETE,
+      category,
+      itemKey,
+    })
+  );
 
   // If we deleted the last item, the category might disappear if we don't ensure it exists.
   // The simplest way to keep category alive is to ensure `_createdAt` is there.
   // Let's just touch `_createdAt` to be safe.
-  await fetchWithAppCheck(dbUrl(`categories/${category}/_createdAt`, branchId), {
+  await menuWrite(dbUrl(`categories/${category}/_createdAt`, branchId), {
     method: 'PUT',
     body: JSON.stringify(Date.now()),
     headers: { 'Content-Type': 'application/json' },
   });
   await addMenuLog(branchId, `Deleted item: ${itemKey} from ${category}`);
+  return { inventoryCleared };
 }
 
 export async function updateItem(branchId, category, itemKey, item) {
   if (item.name) validateItemName(item.name);
-  await fetchWithAppCheck(dbUrl(`categories/${category}/${itemKey}`, branchId), {
+  await menuWrite(dbUrl(`categories/${category}/${itemKey}`, branchId), {
     method: 'PUT',
     body: JSON.stringify(item),
     headers: { 'Content-Type': 'application/json' },
@@ -166,7 +302,7 @@ export async function setBestSeller(branchId, category, itemKey, value) {
   const item = await res.json();
   if (!item) throw new Error('Item not found');
   item.isBestSeller = value === true;
-  await fetchWithAppCheck(dbUrl(`categories/${category}/${itemKey}`, branchId), {
+  await menuWrite(dbUrl(`categories/${category}/${itemKey}`, branchId), {
     method: 'PUT',
     body: JSON.stringify(item),
     headers: { 'Content-Type': 'application/json' },
@@ -214,7 +350,7 @@ export async function updateImageInFirebase(branchId, category, itemKey, imageDa
   const item = await res.json();
   if (!item) throw new Error('Item not found');
   item.imageUrl = imageData;
-  await fetchWithAppCheck(dbUrl(`categories/${category}/${itemKey}`, branchId), {
+  await menuWrite(dbUrl(`categories/${category}/${itemKey}`, branchId), {
     method: 'PUT',
     body: JSON.stringify(item),
     headers: { 'Content-Type': 'application/json' },

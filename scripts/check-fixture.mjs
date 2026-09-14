@@ -1,13 +1,6 @@
-import fs from 'node:fs';
-import { getAccessToken } from './firebase-cli-auth.mjs';
+import { getAccessToken, readRepoEnv } from './firebase-cli-auth.mjs';
 
-const env = fs.readFileSync('.env', 'utf8');
-const readEnv = (key) => {
-  const match = env.match(new RegExp(`^${key}\\s*=\\s*(.+)$`, 'm'));
-  return match ? match[1].trim().replace(/^["']|["']$/g, '') : null;
-};
-
-const db = readEnv('VITE_FIREBASE_DATABASE_URL');
+const db = readRepoEnv('VITE_FIREBASE_DATABASE_URL');
 const headers = { Authorization: `Bearer ${await getAccessToken()}` };
 const read = (p) => fetch(`${db}/${p}.json`, { headers }).then((r) => r.json());
 

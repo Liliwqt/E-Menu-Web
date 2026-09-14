@@ -249,6 +249,7 @@ export default function MenuPage() {
   const [newCategory, setNewCategory] = useState('');
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [modal, setModal] = useState(null); // { mode, category, itemKey, item }
   const [confirmDelete, setConfirmDelete] = useState(null); // { category, itemKey, item } | { category }
   const [logsOpen, setLogsOpen] = useState(false);
@@ -268,11 +269,23 @@ export default function MenuPage() {
     return onMenuLogsChange(branchId, setMenuLogs);
   }, [branchId, logsOpen]);
 
+  // `fn` may return how much of the action it managed to complete. A menu edit
+  // also has to move the matching stock, which is stored separately — if that
+  // half failed, the entry is gone from the menu but its stock row is still on the
+  // Inventory screen, and saying nothing would leave the reader to discover it
+  // there and wonder which screen is lying.
   async function run(label, fn) {
     setBusy(label);
     setError('');
+    setNotice('');
     try {
-      await fn();
+      const result = await fn();
+      if (result?.inventoryCleared === false) {
+        setNotice(
+          'The change was saved, but its stock record could not be removed and may '
+          + 'still appear on the Inventory screen.'
+        );
+      }
     } catch (e) {
       setError(e.message || 'Action failed.');
     } finally {
@@ -302,6 +315,7 @@ export default function MenuPage() {
       </div>
 
       {error && <div className="login__error" role="alert" style={{ marginBottom: 'var(--sp-4)' }}>{error}</div>}
+      {notice && <div className="notice" role="status" style={{ marginBottom: 'var(--sp-4)' }}>{notice}</div>}
 
       {/* Add category */}
       {canManageCategories && (
@@ -487,9 +501,14 @@ export default function MenuPage() {
             <button
               className="btn btn--danger"
               onClick={() => run('delete', async () => {
-                if (confirmDelete.itemKey) await deleteItem(branchId, confirmDelete.category, confirmDelete.itemKey);
-                else await removeCategory(branchId, confirmDelete.category);
+                // Returned so run() can report a delete whose stock cleanup did
+                // not land. The dialog closes either way — the menu change has
+                // happened, and holding it open would suggest otherwise.
+                const result = confirmDelete.itemKey
+                  ? await deleteItem(branchId, confirmDelete.category, confirmDelete.itemKey)
+                  : await removeCategory(branchId, confirmDelete.category);
                 setConfirmDelete(null);
+                return result;
               })}
               disabled={busy === 'delete'}
             >
