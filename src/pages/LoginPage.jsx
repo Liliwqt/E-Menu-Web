@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, X, Chrome } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { isUserAdmin, getUserBranch } from '../config/authConfig';
+import { getUserBranch } from '../config/authConfig';
 import { isEmbeddedInKiosk } from '../lib/kioskBridge';
 import '../styles/login.css';
 
@@ -70,10 +70,6 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (!isAuthenticated || !user?.email || !workspaceLoaded) return;
-    if (isUserAdmin(user.email)) {
-      navigate('/home-admin', { replace: true });
-      return;
-    }
     const branchId = getUserBranch(workspace);
     if (!branchId) {
       navigate('/setup', { replace: true });

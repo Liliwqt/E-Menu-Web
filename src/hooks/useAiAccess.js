@@ -1,18 +1,15 @@
 import { useAuth } from '../context/AuthContext';
-import { isUserAdmin } from '../config/authConfig';
 import { isAiEnabled } from '../lib/workspaceApi';
 import { aiAccessDenial, canUseAi } from '../lib/aiAccess';
 import { CAP } from '../lib/permissions';
 
 function resolveAiAccess() {
-  const { can, workspace, user } = useAuth();
-  const isAdmin = isUserAdmin(user?.email);
+  const { can, workspace } = useAuth();
   return {
-    allowed: canUseAi({ can, workspace, isAiEnabled, isAdmin }),
+    allowed: canUseAi({ can, workspace, isAiEnabled }),
     deniedBy: aiAccessDenial({
       roleAllowsAi: can(CAP.USE_AI),
       planIncludesAi: isAiEnabled(workspace),
-      isAdmin,
     }),
   };
 }

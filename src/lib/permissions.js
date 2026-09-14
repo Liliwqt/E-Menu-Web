@@ -10,7 +10,6 @@
 // Extension on the import below is load-bearing: this module is pulled into the
 // unit tests, which run under Node's ESM loader, and that resolves specifiers
 // literally where Vite would fill in the extension.
-import { isUserAdmin } from '../config/authConfig.js';
 
 export const ROLE = {
   OWNER: 'owner',
@@ -107,9 +106,12 @@ export function can(role, capability) {
 /**
  * Resolve the effective role, most authoritative source first.
  * Returns null when nothing matches (treated as no access).
+ *
+ * Ownership is a record, not an address: `isCompanyOwner` comes from the company
+ * profile naming this uid, and the remaining roles come from the membership rows.
+ * Nothing here can be satisfied by an email address.
  */
-export function resolveRole({ email, accountRole, isCompanyOwner = false, branchRole } = {}) {
-  if (isUserAdmin(email)) return ROLE.OWNER;
+export function resolveRole({ accountRole, isCompanyOwner = false, branchRole } = {}) {
   if (isCompanyOwner) return ROLE.OWNER;
   return normalizeRole(accountRole) || normalizeRole(branchRole) || null;
 }

@@ -4,12 +4,11 @@ import { AI_ACCESS_DENIED, aiAccessDenial, canUseAi } from './aiAccess.js';
 import { CAP, ROLE, can } from './permissions.js';
 
 /** Wires the real capability matrix into the AI decision, as the hook does. */
-function aiFor(role, { planIncludesAi = true, isAdmin = false } = {}) {
+function aiFor(role, { planIncludesAi = true } = {}) {
   return canUseAi({
     can: (capability) => can(role, capability),
     workspace: {},
     isAiEnabled: () => planIncludesAi,
-    isAdmin,
   });
 }
 
@@ -30,10 +29,6 @@ describe('the AI analyst needs both the plan and the role', () => {
   it('still refuses a manager when the plan has no AI', () => {
     assert.equal(aiFor(ROLE.MANAGER, { planIncludesAi: false }), false);
     assert.equal(aiFor(ROLE.OWNER, { planIncludesAi: false }), false);
-  });
-
-  it('lets the administrator through without a plan', () => {
-    assert.equal(aiFor(ROLE.STAFF, { planIncludesAi: false, isAdmin: true }), true);
   });
 
   it('refuses an unrecognised role even on a subscribed branch', () => {
@@ -63,13 +58,6 @@ describe('why access was refused', () => {
     assert.equal(
       aiAccessDenial({ roleAllowsAi: false, planIncludesAi: false }),
       AI_ACCESS_DENIED.PLAN
-    );
-  });
-
-  it('treats the administrator as allowed regardless', () => {
-    assert.equal(
-      aiAccessDenial({ roleAllowsAi: false, planIncludesAi: false, isAdmin: true }),
-      null
     );
   });
 });

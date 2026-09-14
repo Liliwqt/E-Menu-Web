@@ -1,7 +1,7 @@
 import React, { Suspense } from 'react';
 import { Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
-import { canAccessBranch, getUserBranch, isUserAdmin } from './config/authConfig';
+import { canAccessBranch, getUserBranch } from './config/authConfig';
 import { CAP } from './lib/permissions';
 import { ROUTE_DECISION, protectedRouteDecision, setupRouteDecision } from './lib/routeAccess';
 import { CHUNK_FAILURE_ACTION, buildRecoveryUrl, chunkFailureAction } from './lib/chunkRecovery';
@@ -46,7 +46,6 @@ const OrdersPage = lazyPage(() => import('./pages/OrdersPage'));
 const MenuPage = lazyPage(() => import('./pages/MenuPage'));
 const ReportsPage = lazyPage(() => import('./pages/ReportsPage'));
 const HistoryPage = lazyPage(() => import('./pages/HistoryPage'));
-const AdminHomePage = lazyPage(() => import('./pages/AdminHomePage'));
 const KiosksPage = lazyPage(() => import('./pages/KiosksPage'));
 const SubscriptionPage = lazyPage(() => import('./pages/SubscriptionPage'));
 const TeamPage = lazyPage(() => import('./pages/TeamPage'));
@@ -59,11 +58,10 @@ function FullScreenLoader() {
   );
 }
 
-function ProtectedRoute({ children, adminOnly = false }) {
-  const { isAuthenticated, initialLoading, workspaceLoaded, workspaceStatus, workspace, user } = useAuth();
+function ProtectedRoute({ children }) {
+  const { isAuthenticated, initialLoading, workspaceLoaded, workspaceStatus, workspace } = useAuth();
   const params = useParams();
   const branchId = params.branchId;
-  const isAdmin = isUserAdmin(user?.email);
   const homeBranchId = getUserBranch(workspace);
 
   // The ordering that decides this is in routeAccess.js, where a test can pin it
@@ -72,10 +70,8 @@ function ProtectedRoute({ children, adminOnly = false }) {
   const decision = protectedRouteDecision({
     initialLoading,
     isAuthenticated,
-    isAdmin,
     workspaceLoaded,
     workspaceStatus,
-    adminOnly,
     workspace,
     branchId,
     canAccessBranch,
@@ -93,13 +89,11 @@ function ProtectedRoute({ children, adminOnly = false }) {
 }
 
 function SetupRoute() {
-  const { isAuthenticated, initialLoading, workspaceLoaded, workspaceStatus, workspace, user } = useAuth();
-  const isAdmin = isUserAdmin(user?.email);
+  const { isAuthenticated, initialLoading, workspaceLoaded, workspaceStatus, workspace } = useAuth();
 
   const decision = setupRouteDecision({
     initialLoading,
     isAuthenticated,
-    isAdmin,
     workspaceLoaded,
     workspaceStatus,
     workspace,
@@ -107,7 +101,6 @@ function SetupRoute() {
 
   if (decision === ROUTE_DECISION.LOADING) return <FullScreenLoader />;
   if (decision === ROUTE_DECISION.LOGIN) return <Navigate to="/" replace />;
-  if (decision === ROUTE_DECISION.ADMIN_HOME) return <Navigate to="/home-admin" replace />;
   if (decision === ROUTE_DECISION.ACCESS_ERROR) return <AccessErrorScreen />;
   if (decision === ROUTE_DECISION.REDIRECT_HOME) {
     return <Navigate to={`/home/${workspace.branchId}`} replace />;
@@ -163,7 +156,6 @@ export default function App() {
       <Routes>
         <Route path="/" element={<LoginPage />} />
         <Route path="/setup" element={<SetupRoute />} />
-        <Route path="/home-admin" element={<ProtectedRoute adminOnly><AdminHomePage /></ProtectedRoute>} />
         <Route path="/home/:branchId" element={branchRoute(DashboardPage)} />
         <Route path="/analytics/:branchId" element={branchRoute(AnalyticsPage, CAP.VIEW_ANALYTICS)} />
         <Route path="/inventory/:branchId" element={branchRoute(InventoryPage)} />

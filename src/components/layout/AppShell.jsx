@@ -9,7 +9,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useBranchData } from '../../context/BranchDataContext';
 import { useLiveAnalyst } from '../../context/LiveAnalystProvider';
-import { AUTH_CONFIG, isUserAdmin } from '../../config/authConfig';
+import { AUTH_CONFIG } from '../../config/authConfig';
 import { useAiAccess } from '../../hooks/useAiAccess';
 import { isEmbeddedInKiosk, enterKioskMode, getDeviceUid } from '../../lib/kioskBridge';
 import { CAP, roleLabel } from '../../lib/permissions';
@@ -100,7 +100,6 @@ export default function AppShell({ children, title }) {
     : AUTH_CONFIG.branches[branchId]?.name || branchId;
   const displayName = nickname || user?.email?.split('@')[0] || 'Manager';
   const initials = displayName.slice(0, 2).toUpperCase();
-  const admin = isUserAdmin(user?.email);
   const embeddedInKiosk = isEmbeddedInKiosk();
 
   // Navigation is filtered by capability, so a staff account never sees a door
@@ -207,19 +206,11 @@ export default function AppShell({ children, title }) {
             {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
             {theme === 'light' ? 'Dark mode' : 'Light mode'}
           </button>
-          {admin && (
-            <button className="shell__navItem" onClick={() => navigate('/home-admin')}>
-              <LayoutDashboard size={18} />
-              All branches
-            </button>
-          )}
           <button className="shell__user" onClick={() => setSettingsOpen(true)} title="Account settings">
             <div className="shell__avatar">{initials}</div>
             <div style={{ minWidth: 0, flex: 1 }}>
               <div className="shell__userName">{displayName}</div>
-              <div className="shell__userRole">
-                {admin ? 'Administrator' : roleLabel(role)}
-              </div>
+              <div className="shell__userRole">{roleLabel(role)}</div>
             </div>
             <Settings2 size={16} style={{ color: 'var(--text-3)', flexShrink: 0 }} />
           </button>

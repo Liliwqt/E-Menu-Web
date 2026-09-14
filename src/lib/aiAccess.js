@@ -30,17 +30,15 @@ export const AI_ACCESS_DENIED = {
 /**
  * @returns {string|null} null when allowed, otherwise why not.
  */
-export function aiAccessDenial({ roleAllowsAi, planIncludesAi, isAdmin = false }) {
-  if (isAdmin) return null;
+export function aiAccessDenial({ roleAllowsAi, planIncludesAi }) {
   if (!planIncludesAi) return AI_ACCESS_DENIED.PLAN;
   if (!roleAllowsAi) return AI_ACCESS_DENIED.ROLE;
   return null;
 }
 
-export function canUseAi({ can, workspace, isAiEnabled, isAdmin = false }) {
+export function canUseAi({ can, workspace, isAiEnabled }) {
   return aiAccessDenial({
     roleAllowsAi: can(CAP.USE_AI),
     planIncludesAi: isAiEnabled(workspace),
-    isAdmin,
   }) === null;
 }

@@ -21,10 +21,6 @@ export const ROUTE_DECISION = {
   LOADING: 'loading',
   /** Not signed in, or not permitted on this route at all. */
   LOGIN: 'login',
-  /** The app's hardcoded administrator, who bypasses branch scoping. */
-  ADMIN_BYPASS: 'admin-bypass',
-  /** Administrator landing page. */
-  ADMIN_HOME: 'admin-home',
   /** The account records could not be read. Offer a retry, never a form. */
   ACCESS_ERROR: 'access-error',
   /** A real new account: onboarding. */
@@ -47,24 +43,20 @@ export const SETUP_PATH = '/setup';
 export function protectedRouteDecision({
   initialLoading,
   isAuthenticated,
-  isAdmin,
   workspaceLoaded,
   workspaceStatus,
-  adminOnly = false,
   workspace,
   branchId,
   canAccessBranch,
 }) {
   if (initialLoading) return ROUTE_DECISION.LOADING;
   if (!isAuthenticated) return ROUTE_DECISION.LOGIN;
-  if (isAdmin) return ROUTE_DECISION.ADMIN_BYPASS;
   if (!workspaceLoaded) return ROUTE_DECISION.LOADING;
 
   // Checked before onboarding: both a failed read and a new account leave
   // `workspace` null, and only one of them should see the setup form.
   if (workspaceStatus === ACCESS_STATUS.ERROR) return ROUTE_DECISION.ACCESS_ERROR;
 
-  if (adminOnly) return ROUTE_DECISION.LOGIN;
   if (!workspace?.onboardingComplete) return ROUTE_DECISION.SETUP;
 
   if (branchId && !canAccessBranch(workspace, branchId)) return ROUTE_DECISION.REDIRECT_HOME;
@@ -80,16 +72,14 @@ export function protectedRouteDecision({
 export function setupRouteDecision({
   initialLoading,
   isAuthenticated,
-  isAdmin,
   workspaceLoaded,
   workspaceStatus,
   workspace,
 }) {
-  if (initialLoading || (isAuthenticated && !workspaceLoaded && !isAdmin)) {
+  if (initialLoading || (isAuthenticated && !workspaceLoaded)) {
     return ROUTE_DECISION.LOADING;
   }
   if (!isAuthenticated) return ROUTE_DECISION.LOGIN;
-  if (isAdmin) return ROUTE_DECISION.ADMIN_HOME;
   if (workspaceStatus === ACCESS_STATUS.ERROR) return ROUTE_DECISION.ACCESS_ERROR;
   if (workspace?.onboardingComplete) return ROUTE_DECISION.REDIRECT_HOME;
   return ROUTE_DECISION.RENDER;

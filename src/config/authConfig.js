@@ -1,24 +1,24 @@
 /**
  * Access configuration — derived from the user's workspace, not hardcoded.
  *
- * The branch assignment is now stored in the Realtime Database at
+ * The branch assignment is stored in the Realtime Database at
  *   /users/{uid}/workspace/branchId
  * which is created during onboarding and enforced by the Realtime Database
- * Security Rules. This file no longer holds an email allowlist; the admin
- * shortcut is the only hardcoded exception (used to seed the very first
- * production owner during setup).
+ * Security Rules. There is no email allowlist and no privileged account: an
+ * account's access comes from the records it owns, and the first owner is whoever
+ * completes onboarding.
  *
  * If a signed-in user has no workspace, the React router redirects them to
  * /setup to complete onboarding.
+ *
+ * This file previously carried a hardcoded administrator address, which bypassed
+ * branch scoping entirely and granted owner rights everywhere. It existed to seed
+ * the first production owner, which onboarding now does properly, so it was a
+ * single-address backdoor in a public repository with nothing left to justify it.
  */
 export const AUTH_CONFIG = {
-  adminEmail: 'fitzhofer@gmail.com',
   branches: {},
 };
-
-export function isUserAdmin(email) {
-  return email === AUTH_CONFIG.adminEmail;
-}
 
 export function getUserBranch(workspace) {
   if (!workspace?.onboardingComplete || !workspace.companyId) return null;

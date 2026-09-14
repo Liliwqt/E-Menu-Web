@@ -6,10 +6,8 @@ import { ACCESS_STATUS, ROUTE_DECISION, protectedRouteDecision, setupRouteDecisi
 const signedIn = {
   initialLoading: false,
   isAuthenticated: true,
-  isAdmin: false,
   workspaceLoaded: true,
   workspaceStatus: ACCESS_STATUS.READY,
-  adminOnly: false,
   workspace: { onboardingComplete: true, companyId: 'company-a', branchId: 'branch-a' },
   branchId: 'branch-a',
   canAccessBranch: () => true,
@@ -29,20 +27,6 @@ describe('an unreachable account is never mistaken for a new one', () => {
     assert.equal(decision, ROUTE_DECISION.ACCESS_ERROR);
   });
 
-  it('still refuses the setup form on the setup route itself', () => {
-    // The redirect that reaches /setup could be stale or typed. This route is the
-    // one that commits the write, so it does not rely on the redirect being right.
-    const decision = setupRouteDecision({
-      initialLoading: false,
-      isAuthenticated: true,
-      isAdmin: false,
-      workspaceLoaded: true,
-      workspaceStatus: ACCESS_STATUS.ERROR,
-      workspace: null,
-    });
-    assert.equal(decision, ROUTE_DECISION.ACCESS_ERROR);
-  });
-
   it('sends a genuine new account to the setup form', () => {
     const decision = protectedRouteDecision({
       ...signedIn,
@@ -50,6 +34,19 @@ describe('an unreachable account is never mistaken for a new one', () => {
       workspace: null,
     });
     assert.equal(decision, ROUTE_DECISION.SETUP);
+  });
+
+  it('still refuses the setup form on the setup route itself', () => {
+    // The redirect that reaches /setup could be stale or typed. This route is the
+    // one that commits the write, so it does not rely on the redirect being right.
+    const decision = setupRouteDecision({
+      initialLoading: false,
+      isAuthenticated: true,
+      workspaceLoaded: true,
+      workspaceStatus: ACCESS_STATUS.ERROR,
+      workspace: null,
+    });
+    assert.equal(decision, ROUTE_DECISION.ACCESS_ERROR);
   });
 
   it('keeps the two apart even though both carry a null workspace', () => {
@@ -86,7 +83,6 @@ describe('waiting for the records to load', () => {
       setupRouteDecision({
         initialLoading: false,
         isAuthenticated: true,
-        isAdmin: false,
         workspaceLoaded: false,
         workspaceStatus: ACCESS_STATUS.LOADING,
         workspace: null,
@@ -96,7 +92,7 @@ describe('waiting for the records to load', () => {
   });
 });
 
-describe('signed-out and administrator sessions', () => {
+describe('signed-out sessions', () => {
   it('sends a signed-out visitor to the login route', () => {
     assert.equal(
       protectedRouteDecision({ ...signedIn, isAuthenticated: false }),
@@ -104,36 +100,16 @@ describe('signed-out and administrator sessions', () => {
     );
   });
 
-  it('lets the administrator through without a workspace', () => {
-    assert.equal(
-      protectedRouteDecision({
-        ...signedIn,
-        isAdmin: true,
-        workspace: null,
-        workspaceStatus: ACCESS_STATUS.NONE,
-      }),
-      ROUTE_DECISION.ADMIN_BYPASS
-    );
-  });
-
-  it('keeps a non-administrator out of administrator-only routes', () => {
-    assert.equal(
-      protectedRouteDecision({ ...signedIn, adminOnly: true }),
-      ROUTE_DECISION.LOGIN
-    );
-  });
-
-  it('lands the administrator on their own home from the setup route', () => {
+  it('sends a signed-out visitor to the login route from the setup route too', () => {
     assert.equal(
       setupRouteDecision({
         initialLoading: false,
-        isAuthenticated: true,
-        isAdmin: true,
+        isAuthenticated: false,
         workspaceLoaded: true,
         workspaceStatus: ACCESS_STATUS.NONE,
         workspace: null,
       }),
-      ROUTE_DECISION.ADMIN_HOME
+      ROUTE_DECISION.LOGIN
     );
   });
 });
@@ -172,7 +148,6 @@ describe('a loaded session', () => {
       setupRouteDecision({
         initialLoading: false,
         isAuthenticated: true,
-        isAdmin: false,
         workspaceLoaded: true,
         workspaceStatus: ACCESS_STATUS.READY,
         workspace: { onboardingComplete: true, companyId: 'company-a', branchId: 'branch-a' },
@@ -186,7 +161,6 @@ describe('a loaded session', () => {
       setupRouteDecision({
         initialLoading: false,
         isAuthenticated: true,
-        isAdmin: false,
         workspaceLoaded: true,
         workspaceStatus: ACCESS_STATUS.NONE,
         workspace: null,

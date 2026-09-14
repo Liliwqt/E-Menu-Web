@@ -24,7 +24,7 @@ import {
   useRef,
 } from 'react';
 import { useAuth } from './AuthContext';
-import { getUserBranch, isUserAdmin, AUTH_CONFIG } from '../config/authConfig';
+import { AUTH_CONFIG } from '../config/authConfig';
 import { generateAIAnalysis, clearAnalysisCache } from '../lib/aiAnalystService';
 import { useAiAccess } from '../hooks/useAiAccess';
 
@@ -142,7 +142,6 @@ export function LiveAnalystProvider({ children }) {
   // This provider runs the background AI jobs on timers, so a wrong answer here
   // does not just show a panel — it spends money without being asked to.
   const aiEnabled = useAiAccess();
-
   // Refs survive re-renders and never cause re-triggers.
   const generatingRef = useRef(false);
   const handoffInFlightRef = useRef(false);
@@ -162,10 +161,13 @@ export function LiveAnalystProvider({ children }) {
   const [branchDataVersion, setBranchDataVersion] = useReducer((x) => x + 1, 0);
 
   const activeBranch = useMemo(() => {
-    if (!user?.email) return null;
-    if (isUserAdmin(user.email)) return 'branch1';
-    return workspace?.onboardingComplete ? workspace.branchId : getUserBranch(user.email) || null;
-  }, [user?.email, workspace]);
+    // The branch comes from the workspace record. The previous version also fell
+    // back to getUserBranch(user.email), passing an email where a workspace is
+    // expected, so that branch was unreachable — and a hardcoded 'branch1' for the
+    // administrator address, which no longer exists.
+    if (!workspace?.onboardingComplete) return null;
+    return workspace.branchId || null;
+  }, [workspace]);
 
   const branchLabel = useMemo(
     () => workspace?.branchId === activeBranch ? workspace.branchName : formatBranchLabel(activeBranch),
