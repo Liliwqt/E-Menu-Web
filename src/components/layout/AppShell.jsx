@@ -404,7 +404,12 @@ export default function AppShell({ children, title }) {
 
       <HelpCenter open={helpOpen} onClose={() => setHelpOpen(false)} />
 
-      <AINotificationPanel />
+      {/* Gated like every other AI surface. It is invisible without aiEnabled
+          today, because every trigger in LiveAnalystProvider is gated, but that
+          left one AI element mounted for users who cannot use it — and the only
+          thing keeping it off the screen was an opacity rule driven by state that
+          happened to stay closed. */}
+      {aiEnabled && <AINotificationPanel />}
     </div>
   );
 }

@@ -1,7 +1,21 @@
 import { useAuth } from '../context/AuthContext';
 import { isUserAdmin } from '../config/authConfig';
 import { isAiEnabled } from '../lib/workspaceApi';
-import { canUseAi } from '../lib/aiAccess';
+import { aiAccessDenial, canUseAi } from '../lib/aiAccess';
+import { CAP } from '../lib/permissions';
+
+function resolveAiAccess() {
+  const { can, workspace, user } = useAuth();
+  const isAdmin = isUserAdmin(user?.email);
+  return {
+    allowed: canUseAi({ can, workspace, isAiEnabled, isAdmin }),
+    deniedBy: aiAccessDenial({
+      roleAllowsAi: can(CAP.USE_AI),
+      planIncludesAi: isAiEnabled(workspace),
+      isAdmin,
+    }),
+  };
+}
 
 /**
  * Whether the signed-in session may use the AI analyst — see lib/aiAccess.js for
@@ -11,11 +25,17 @@ import { canUseAi } from '../lib/aiAccess';
  * only answers the plan half.
  */
 export function useAiAccess() {
-  const { can, workspace, user } = useAuth();
-  return canUseAi({
-    can,
-    workspace,
-    isAiEnabled,
-    isAdmin: isUserAdmin(user?.email),
-  });
+  return resolveAiAccess().allowed;
+}
+
+/**
+ * Why AI is unavailable, for the screens that have to explain it.
+ *
+ * A plan problem and a role problem need different words. Telling a staff member
+ * to start a trial is wrong twice over: the branch may already be subscribed, and
+ * they cannot subscribe anyway — billing is the owner's. Returns null when AI is
+ * available, and the reason otherwise.
+ */
+export function useAiDenial() {
+  return resolveAiAccess().deniedBy;
 }

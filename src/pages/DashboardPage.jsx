@@ -22,7 +22,7 @@ import {
 } from '../lib/executiveMetrics';
 import { buildRecommendations } from '../lib/recommendations';
 import { generateAIAnalysis } from '../lib/aiAnalystService';
-import { useAiAccess } from '../hooks/useAiAccess';
+import { useAiAccess, useAiDenial } from '../hooks/useAiAccess';
 import UpgradePrompt from '../components/ui/UpgradePrompt';
 import '../styles/dashboard.css';
 
@@ -115,6 +115,9 @@ export default function DashboardPage() {
   const [insightLoading, setInsightLoading] = useState(false);
   const [presentationOpen, setPresentationOpen] = useState(false);
   const aiEnabled = useAiAccess();
+  // Why AI is unavailable, so the prompt can say something true. Without this a
+  // staff member was shown a plan upsell for a problem that is not about the plan.
+  const aiDeniedBy = useAiDenial();
 
   const period = useMemo(() => resolvePeriod({ type: 'today' }), []);
 
@@ -365,6 +368,7 @@ export default function DashboardPage() {
               feature="AI Operations suite"
               description="Unlock the AI Live Analyst, Shift Handoff, Revenue Leak Detection, AI Chat and Smart Recommendations with a 14-day trial of the Subscription plan."
               branchId={branchId}
+              deniedBy={aiDeniedBy}
             />
           )}
 
