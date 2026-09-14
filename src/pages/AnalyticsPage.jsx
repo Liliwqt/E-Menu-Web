@@ -18,6 +18,7 @@ import {
 } from '../lib/executiveMetrics';
 import { generateAIAnalysis } from '../lib/aiAnalystService';
 import { useAiAccess } from '../hooks/useAiAccess';
+import { CAP } from '../lib/permissions';
 import '../styles/analytics.css';
 import '../styles/dashboard.css';
 
@@ -71,7 +72,10 @@ function DeepSection({ title, data }) {
 export default function AnalyticsPage() {
   const navigate = useNavigate();
   const { branchId, analytics, analyticsLoaded, inventory, logs, aiAnalyticsData, hasOrders } = useBranchData();
-  const { workspace } = useAuth();
+  const { workspace, can } = useAuth();
+  // The two header links below are gated on what their routes require.
+  const canCorrectAnalytics = can(CAP.CORRECT_ANALYTICS);
+  const canExportReports = can(CAP.EXPORT_REPORTS);
   const aiEnabled = useAiAccess();
 
   const [preset, setPreset] = useState('today');
@@ -193,12 +197,20 @@ export default function AnalyticsPage() {
           ))}
         </div>
         <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
-          <button className="btn btn--secondary btn--sm" onClick={() => navigate(`/analytics-history/${branchId}`)}>
-            <History size={14} /> Order history
-          </button>
-          <button className="btn btn--secondary btn--sm" onClick={() => navigate(`/reports/${branchId}`)}>
-            <FileText size={14} /> Reports
-          </button>
+          {/* Each link carries the capability its route requires. Without this a
+              role that can read analytics — staff can — was shown two buttons
+              whose destinations are closed to them, so both bounced back to the
+              dashboard and looked broken. */}
+          {canCorrectAnalytics && (
+            <button className="btn btn--secondary btn--sm" onClick={() => navigate(`/analytics-history/${branchId}`)}>
+              <History size={14} /> Order history
+            </button>
+          )}
+          {canExportReports && (
+            <button className="btn btn--secondary btn--sm" onClick={() => navigate(`/reports/${branchId}`)}>
+              <FileText size={14} /> Reports
+            </button>
+          )}
         </div>
       </div>
 
