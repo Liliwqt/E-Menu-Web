@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { KeyRound, Palette, UserRound } from 'lucide-react';
+import { KeyRound, LogOut, Palette, UserRound } from 'lucide-react';
 import Modal from '../ui/Modal';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 
 export default function SettingsModal({ open, onClose }) {
-  const { user, nickname, updateNickname, changePassword } = useAuth();
+  const { user, nickname, updateNickname, changePassword, logout } = useAuth();
   const { theme, setThemeMode } = useTheme();
   const [nicknameInput, setNicknameInput] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -54,6 +54,16 @@ export default function SettingsModal({ open, onClose }) {
   const sectionStyle = { display: 'grid', gap: 10, paddingBottom: 'var(--sp-5)', borderBottom: '1px solid var(--border)', marginBottom: 'var(--sp-5)' };
   const headStyle = { display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-2)' };
 
+  /**
+   * Closes before signing out, so the modal is not left open over the login
+   * screen. Signing out flips isAuthenticated, and the router sends the user to
+   * the login page on its own, so there is nowhere to navigate to here.
+   */
+  async function handleSignOut() {
+    onClose?.();
+    await logout();
+  }
+
   return (
     <Modal open={open} onClose={onClose} title="Account settings" subtitle={user?.email}>
       <div style={sectionStyle}>
@@ -99,6 +109,23 @@ export default function SettingsModal({ open, onClose }) {
           <button className={`seg__btn ${theme === 'light' ? 'is-active' : ''}`} onClick={() => setThemeMode('light')}>Light</button>
           <button className={`seg__btn ${theme === 'dark' ? 'is-active' : ''}`} onClick={() => setThemeMode('dark')}>Dark</button>
         </div>
+      </div>
+
+      {/*
+        Sign out lives here as well as in the sidebar footer, because the sidebar
+        does not exist on a narrow window: the compact layout replaces it with a
+        header and a bottom bar, and neither carried a way out of the account.
+        This modal is opened by the account button in both layouts, so one copy
+        here covers every screen size.
+      */}
+      <div style={{ display: 'grid', gap: 10, marginTop: 'var(--sp-5)', paddingTop: 'var(--sp-5)', borderTop: '1px solid var(--border)' }}>
+        <button
+          className="btn btn--ghost"
+          onClick={handleSignOut}
+          style={{ justifySelf: 'start', color: 'var(--text-3)' }}
+        >
+          <LogOut size={15} /> Sign out
+        </button>
       </div>
 
       {msg && (
