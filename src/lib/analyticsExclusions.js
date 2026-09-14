@@ -58,3 +58,22 @@ export function excludeOrder(order, exclusions = {}) {
 export function applyExclusions(orders = [], exclusions = {}) {
   return (orders || []).map((order) => excludeOrder(order, exclusions));
 }
+
+/**
+ * Folds flags onto a raw `/logs` snapshot and returns [orderId, order] pairs.
+ *
+ * This is the step that makes an excluded order ineligible for the incremental
+ * processor, and it is deliberately a pure function here rather than three lines
+ * inside the hook: the hook subscribes to Firebase, so anything written there
+ * can only be checked by signing in and watching. Written here, the decision the
+ * processor relies on is one a test can make.
+ *
+ * `orderId` is added to each order because the snapshot key is the same value
+ * while an order is live, and it is what the flags are keyed by.
+ */
+export function foldSnapshot(logsData = {}, exclusions = {}) {
+  return Object.entries(logsData || {}).map(([orderId, orderData]) => [
+    orderId,
+    excludeOrder({ orderId, ...orderData }, exclusions),
+  ]);
+}
