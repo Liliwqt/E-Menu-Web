@@ -4,22 +4,56 @@ import { useAuth } from './context/AuthContext';
 import { canAccessBranch, getUserBranch, isUserAdmin } from './config/authConfig';
 import { CAP } from './lib/permissions';
 import { ROUTE_DECISION, protectedRouteDecision, setupRouteDecision } from './lib/routeAccess';
+import { CHUNK_FAILURE_ACTION, CHUNK_RELOAD_FLAG, chunkFailureAction } from './lib/chunkRecovery';
 import { BranchDataProvider } from './context/BranchDataContext';
 import LoginPage from './pages/LoginPage';
 import WorkspaceSetupPage from './pages/WorkspaceSetupPage';
 import AccessErrorScreen from './components/ui/AccessErrorScreen';
 
-const DashboardPage = React.lazy(() => import('./pages/DashboardPage'));
-const AnalyticsPage = React.lazy(() => import('./pages/AnalyticsPage'));
-const InventoryPage = React.lazy(() => import('./pages/InventoryPage'));
-const OrdersPage = React.lazy(() => import('./pages/OrdersPage'));
-const MenuPage = React.lazy(() => import('./pages/MenuPage'));
-const ReportsPage = React.lazy(() => import('./pages/ReportsPage'));
-const HistoryPage = React.lazy(() => import('./pages/HistoryPage'));
-const AdminHomePage = React.lazy(() => import('./pages/AdminHomePage'));
-const KiosksPage = React.lazy(() => import('./pages/KiosksPage'));
-const SubscriptionPage = React.lazy(() => import('./pages/SubscriptionPage'));
-const TeamPage = React.lazy(() => import('./pages/TeamPage'));
+/**
+ * A page that recovers when its chunk belongs to a previous deploy.
+ *
+ * Deploying replaces the hashed chunk files and deletes the old ones, so a tab
+ * still holding the previous index.html asks for a file that is gone the first
+ * time it opens a page it has not loaded yet. The reload below fetches the
+ * current index.html, which names the chunks that exist now.
+ *
+ * Clears the flag on any successful load, so the next deploy gets its own
+ * recovery rather than inheriting a spent one.
+ */
+function lazyPage(load) {
+  return React.lazy(() => load().then(
+    (module) => {
+      sessionStorage.removeItem(CHUNK_RELOAD_FLAG);
+      return module;
+    },
+    (error) => {
+      const action = chunkFailureAction({
+        alreadyRetried: sessionStorage.getItem(CHUNK_RELOAD_FLAG) === '1',
+      });
+      if (action === CHUNK_FAILURE_ACTION.SURFACE) throw error;
+
+      sessionStorage.setItem(CHUNK_RELOAD_FLAG, '1');
+      window.location.reload();
+      // Never settles on purpose: the page is reloading, and resolving with
+      // nothing would let React render a module that does not exist. Rejecting
+      // would surface the error we are in the middle of recovering from.
+      return new Promise(() => {});
+    }
+  ));
+}
+
+const DashboardPage = lazyPage(() => import('./pages/DashboardPage'));
+const AnalyticsPage = lazyPage(() => import('./pages/AnalyticsPage'));
+const InventoryPage = lazyPage(() => import('./pages/InventoryPage'));
+const OrdersPage = lazyPage(() => import('./pages/OrdersPage'));
+const MenuPage = lazyPage(() => import('./pages/MenuPage'));
+const ReportsPage = lazyPage(() => import('./pages/ReportsPage'));
+const HistoryPage = lazyPage(() => import('./pages/HistoryPage'));
+const AdminHomePage = lazyPage(() => import('./pages/AdminHomePage'));
+const KiosksPage = lazyPage(() => import('./pages/KiosksPage'));
+const SubscriptionPage = lazyPage(() => import('./pages/SubscriptionPage'));
+const TeamPage = lazyPage(() => import('./pages/TeamPage'));
 
 function FullScreenLoader() {
   return (

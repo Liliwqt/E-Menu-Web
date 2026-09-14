@@ -32,6 +32,10 @@ const MENU = [
 // repeated runs of seed() do not pile up orders.
 const ORDER_ID = '11111111-2222-4333-8444-555555555555';
 const ORDER_NUMBER = '5EED0001';
+// A second order, written on its own so the incremental processor can be watched
+// reacting to a new arrival while the first order is excluded.
+const ORDER_2_ID = '11111111-2222-4333-8444-555555555556';
+const ORDER_2_NUMBER = '5EED0002';
 
 function orderBody(now) {
   return {
@@ -44,6 +48,25 @@ function orderBody(now) {
       { name: 'Cappuccino', size: 'Medium', quantity: 1, price: 110, subtotal: 110 },
     ],
     total: 230,
+    paymentMethod: 'COUNTER',
+    paymentStatus: 'PAY_AT_COUNTER',
+    timestamp: now,
+    inventoryProcessed: true,
+    inventoryProcessedAt: now,
+    orderSource: 'android_kiosk',
+  };
+}
+
+function secondOrderBody(now) {
+  return {
+    orderId: ORDER_2_ID,
+    submittedByUid: 'seed-script',
+    orderNumber: ORDER_2_NUMBER,
+    customerName: 'Seed Order Two',
+    items: [
+      { name: 'Cappuccino', size: 'Medium', quantity: 2, price: 110, subtotal: 220 },
+    ],
+    total: 220,
     paymentMethod: 'COUNTER',
     paymentStatus: 'PAY_AT_COUNTER',
     timestamp: now,
@@ -171,19 +194,36 @@ async function clean() {
   if (!remaining) await del(headers, `${branchPath}/categories/Drinks`);
 
   await del(headers, `${branchPath}/logs/${ORDER_ID}`);
+  await del(headers, `${branchPath}/logs/${ORDER_2_ID}`);
   // Any exclusion flags the manual pass created, so the run leaves nothing behind.
   await del(headers, `${branchPath}/analyticsExclusions`);
   await del(headers, `${branchPath}/inventoryHistory`);
   await del(headers, `${branchPath}/menuLogs`);
 
-  console.log('cleaned: categories, inventory, the seeded order, and any exclusions');
+  console.log('cleaned: categories, inventory, both seeded orders, and any exclusions');
   await verify();
 }
 
-const commands = { seed, verify, clean };
+/**
+ * Writes one further order, on its own.
+ *
+ * This is the interesting test rather than a reload. A new order makes /logs
+ * change, and the incremental processor then re-reads the whole snapshot and
+ * decides what counts. That is the path that used to count an excluded order
+ * again, and it runs while the exclusions listener is live rather than being
+ * reconstructed at page load.
+ */
+async function addOrder() {
+  const headers = await authHeaders();
+  await put(headers, `${branchPath}/logs/${ORDER_2_ID}`, secondOrderBody(Date.now()));
+  console.log(`added order #${ORDER_2_NUMBER}, total 220`);
+  await verify();
+}
+
+const commands = { seed, verify, clean, 'add-order': addOrder };
 const run = commands[command];
 if (!run) {
-  console.error(`unknown command "${command}" — use seed, verify or clean`);
+  console.error(`unknown command "${command}" — use seed, verify, add-order or clean`);
   process.exit(1);
 }
 run().catch((err) => {
