@@ -12,7 +12,7 @@ import {
   forecastTomorrowRevenue, formatHourLabel,
 } from '../lib/executiveMetrics';
 import { generateAIAnalysis } from '../lib/aiAnalystService';
-import { isAiEnabled } from '../lib/workspaceApi';
+import { useAiAccess } from '../hooks/useAiAccess';
 import '../styles/reports.css';
 import '../styles/analytics.css';
 
@@ -26,7 +26,7 @@ const RANGES = [
 export default function ReportsPage() {
   const { branchId, analytics, inventory, logs, aiAnalyticsData, hasOrders } = useBranchData();
   const { nickname, user, workspace } = useAuth();
-  const aiEnabled = isAiEnabled(workspace);
+  const aiEnabled = useAiAccess();
   const [rangeKey, setRangeKey] = useState('7d');
   const [commentary, setCommentary] = useState(null);
   const [aiBusy, setAiBusy] = useState(false);

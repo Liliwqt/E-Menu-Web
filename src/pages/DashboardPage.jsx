@@ -22,7 +22,7 @@ import {
 } from '../lib/executiveMetrics';
 import { buildRecommendations } from '../lib/recommendations';
 import { generateAIAnalysis } from '../lib/aiAnalystService';
-import { isAiEnabled } from '../lib/workspaceApi';
+import { useAiAccess } from '../hooks/useAiAccess';
 import UpgradePrompt from '../components/ui/UpgradePrompt';
 import '../styles/dashboard.css';
 
@@ -114,7 +114,7 @@ export default function DashboardPage() {
   const [insight, setInsight] = useState(null);
   const [insightLoading, setInsightLoading] = useState(false);
   const [presentationOpen, setPresentationOpen] = useState(false);
-  const aiEnabled = isAiEnabled(workspace);
+  const aiEnabled = useAiAccess();
 
   const period = useMemo(() => resolvePeriod({ type: 'today' }), []);
 

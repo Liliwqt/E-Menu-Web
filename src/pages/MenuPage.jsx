@@ -236,7 +236,12 @@ export default function MenuPage() {
   // availability, which is the one menu action their role allows.
   const canEditMenu = can(CAP.MANAGE_ITEMS);
   const canDelete = can(CAP.DELETE_MENU_ITEM);
+  // Named per action rather than borrowing MANAGE_MENU for all of it, so the
+  // matrix says what the buttons actually do. They resolve to the same tier
+  // today; if that ever changes, this decides it instead of having to notice.
   const canManageCategories = can(CAP.MANAGE_MENU);
+  const canRenameCategory = can(CAP.RENAME_CATEGORY);
+  const canDeleteCategory = can(CAP.DELETE_CATEGORY);
   const [categories, setCategories] = useState([]);
   const [itemsByCategory, setItemsByCategory] = useState({});
   const [loaded, setLoaded] = useState(false);
@@ -351,20 +356,24 @@ export default function MenuPage() {
                   <h2 style={{ fontSize: 'var(--text-lg)' }}>{cat}</h2>
                   <span className="pill pill--neutral num">{Object.keys(items).length}</span>
                 </button>
-                {canManageCategories && (
+                {(canRenameCategory || canDeleteCategory) && (
                   <div className="flex gap-2">
-                    <button
-                      className="btn btn--ghost btn--sm"
-                      onClick={() => {
-                        const next = prompt(`Rename category "${cat}" to:`, cat);
-                        if (next && next !== cat) run('rencat', () => renameCategory(branchId, cat, next));
-                      }}
-                    >
-                      <Pencil size={13} /> Rename
-                    </button>
-                    <button className="btn btn--ghost btn--sm" style={{ color: 'var(--danger)' }} onClick={() => setConfirmDelete({ category: cat })}>
-                      <Trash2 size={13} /> Delete
-                    </button>
+                    {canRenameCategory && (
+                      <button
+                        className="btn btn--ghost btn--sm"
+                        onClick={() => {
+                          const next = prompt(`Rename category "${cat}" to:`, cat);
+                          if (next && next !== cat) run('rencat', () => renameCategory(branchId, cat, next));
+                        }}
+                      >
+                        <Pencil size={13} /> Rename
+                      </button>
+                    )}
+                    {canDeleteCategory && (
+                      <button className="btn btn--ghost btn--sm" style={{ color: 'var(--danger)' }} onClick={() => setConfirmDelete({ category: cat })}>
+                        <Trash2 size={13} /> Delete
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

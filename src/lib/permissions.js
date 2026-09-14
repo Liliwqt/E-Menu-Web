@@ -3,11 +3,14 @@
 // Owner is company-wide: branches, billing, and who manages each branch.
 // Manager and staff each belong to exactly one branch, assigned by the owner.
 //
-// This matrix is the single source of truth for UI gating. The Realtime
-// Database rules enforce the same matrix server-side, so hiding a control here
-// is convenience, not security.
-
-import { isUserAdmin } from '../config/authConfig';
+// The matrix is the single source of truth for UI gating. The Realtime Database
+// rules enforce the same matrix server-side, so hiding a control here is
+// convenience, not security.
+//
+// Extension on the import below is load-bearing: this module is pulled into the
+// unit tests, which run under Node's ESM loader, and that resolves specifiers
+// literally where Vite would fill in the extension.
+import { isUserAdmin } from '../config/authConfig.js';
 
 export const ROLE = {
   OWNER: 'owner',
@@ -80,8 +83,15 @@ const ROLE_CAPS = {
   [ROLE.STAFF]: new Set(STAFF_CAPS),
 };
 
+/**
+ * Case and surrounding whitespace are normalised rather than treated as part of
+ * the value. A role is written by the app, but it is also written by hand in the
+ * console and can pick up a stray space there; failing closed on an invisible
+ * character would look to the person affected like their account was revoked.
+ * Normalising cannot widen access either — the writer still chose the word.
+ */
 export function normalizeRole(value) {
-  const role = String(value || '').toLowerCase();
+  const role = String(value || '').trim().toLowerCase();
   return role === ROLE.OWNER || role === ROLE.MANAGER || role === ROLE.STAFF ? role : null;
 }
 

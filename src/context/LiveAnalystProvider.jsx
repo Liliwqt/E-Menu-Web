@@ -26,7 +26,7 @@ import {
 import { useAuth } from './AuthContext';
 import { getUserBranch, isUserAdmin, AUTH_CONFIG } from '../config/authConfig';
 import { generateAIAnalysis, clearAnalysisCache } from '../lib/aiAnalystService';
-import { isAiEnabled } from '../lib/workspaceApi';
+import { useAiAccess } from '../hooks/useAiAccess';
 
 const MIN_NOTIFICATION_INTERVAL_MS = 4 * 60 * 1000;   // 4 minutes
 const MAX_NOTIFICATION_INTERVAL_MS = 10 * 60 * 1000;  // 10 minutes
@@ -139,7 +139,9 @@ function formatBranchLabel(branchId) {
 export function LiveAnalystProvider({ children }) {
   const { user, isAuthenticated, nicknameLoaded, nickname, workspace } = useAuth();
   const [state, dispatch] = useReducer(reducer, null, createInitialState);
-  const aiEnabled = isAiEnabled(workspace) || isUserAdmin(user?.email);
+  // This provider runs the background AI jobs on timers, so a wrong answer here
+  // does not just show a panel — it spends money without being asked to.
+  const aiEnabled = useAiAccess();
 
   // Refs survive re-renders and never cause re-triggers.
   const generatingRef = useRef(false);

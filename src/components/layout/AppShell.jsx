@@ -10,7 +10,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useBranchData } from '../../context/BranchDataContext';
 import { useLiveAnalyst } from '../../context/LiveAnalystProvider';
 import { AUTH_CONFIG, isUserAdmin } from '../../config/authConfig';
-import { isAiEnabled } from '../../lib/workspaceApi';
+import { useAiAccess } from '../../hooks/useAiAccess';
 import { isEmbeddedInKiosk, enterKioskMode, getDeviceUid } from '../../lib/kioskBridge';
 import { CAP, roleLabel } from '../../lib/permissions';
 import SettingsModal from './SettingsModal';
@@ -73,7 +73,8 @@ export default function AppShell({ children, title }) {
   const [kioskDialogOpen, setKioskDialogOpen] = useState(false);
   const [deviceUid, setDeviceUid] = useState('');
   const [moreOpen, setMoreOpen] = useState(false);
-  const aiEnabled = isAiEnabled(workspace) || isUserAdmin(user?.email);
+  // Role and plan together. isAiEnabled() alone is only the plan half.
+  const aiEnabled = useAiAccess();
 
   // Feed branch data to the LiveAnalystProvider (which sits above the router)
   // so it can generate AI analyses with current branch analytics.

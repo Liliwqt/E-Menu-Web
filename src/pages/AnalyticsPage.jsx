@@ -17,7 +17,7 @@ import {
   getPeriodProductStats, formatHourLabel,
 } from '../lib/executiveMetrics';
 import { generateAIAnalysis } from '../lib/aiAnalystService';
-import { isAiEnabled } from '../lib/workspaceApi';
+import { useAiAccess } from '../hooks/useAiAccess';
 import '../styles/analytics.css';
 import '../styles/dashboard.css';
 
@@ -72,7 +72,7 @@ export default function AnalyticsPage() {
   const navigate = useNavigate();
   const { branchId, analytics, analyticsLoaded, inventory, logs, aiAnalyticsData, hasOrders } = useBranchData();
   const { workspace } = useAuth();
-  const aiEnabled = isAiEnabled(workspace);
+  const aiEnabled = useAiAccess();
 
   const [preset, setPreset] = useState('today');
   const [custom, setCustom] = useState({ from: '', to: '' });
