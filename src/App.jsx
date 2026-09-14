@@ -4,7 +4,7 @@ import { useAuth } from './context/AuthContext';
 import { canAccessBranch, getUserBranch, isUserAdmin } from './config/authConfig';
 import { CAP } from './lib/permissions';
 import { ROUTE_DECISION, protectedRouteDecision, setupRouteDecision } from './lib/routeAccess';
-import { CHUNK_FAILURE_ACTION, CHUNK_RELOAD_FLAG, chunkFailureAction } from './lib/chunkRecovery';
+import { CHUNK_FAILURE_ACTION, buildRecoveryUrl, chunkFailureAction } from './lib/chunkRecovery';
 import { BranchDataProvider } from './context/BranchDataContext';
 import LoginPage from './pages/LoginPage';
 import WorkspaceSetupPage from './pages/WorkspaceSetupPage';
@@ -15,27 +15,23 @@ import AccessErrorScreen from './components/ui/AccessErrorScreen';
  *
  * Deploying replaces the hashed chunk files and deletes the old ones, so a tab
  * still holding the previous index.html asks for a file that is gone the first
- * time it opens a page it has not loaded yet. The reload below fetches the
- * current index.html, which names the chunks that exist now.
+ * time it opens a page it has not loaded yet.
  *
- * Clears the flag on any successful load, so the next deploy gets its own
- * recovery rather than inheriting a spent one.
+ * The retry navigates to a URL carrying a marker, because reloading the same URL
+ * can be answered from the browser's cache — with the stale index.html that
+ * caused the failure. A marked URL has never been fetched, so it has to go to the
+ * network, and the path is untouched, so the same page is routed to. The marker
+ * is removed in main.jsx once the app is running.
  */
 function lazyPage(load) {
   return React.lazy(() => load().then(
-    (module) => {
-      sessionStorage.removeItem(CHUNK_RELOAD_FLAG);
-      return module;
-    },
+    (module) => module,
     (error) => {
-      const action = chunkFailureAction({
-        alreadyRetried: sessionStorage.getItem(CHUNK_RELOAD_FLAG) === '1',
-      });
+      const action = chunkFailureAction({ href: window.location.href });
       if (action === CHUNK_FAILURE_ACTION.SURFACE) throw error;
 
-      sessionStorage.setItem(CHUNK_RELOAD_FLAG, '1');
-      window.location.reload();
-      // Never settles on purpose: the page is reloading, and resolving with
+      window.location.replace(buildRecoveryUrl(window.location.href));
+      // Never settles on purpose: the page is navigating away, and resolving with
       // nothing would let React render a module that does not exist. Rejecting
       // would surface the error we are in the middle of recovering from.
       return new Promise(() => {});
