@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { managerHandoverNote } from './teamNotices.js';
+import { managerHandoverNote, removalNote } from './teamNotices.js';
 
 test('says nothing when no manager was replaced', () => {
   assert.equal(managerHandoverNote({}), '');
@@ -27,4 +27,18 @@ test('a completed handover is not reported as a failure, and vice versa', () => 
   const done = managerHandoverNote({ replacedManagerUid: 'a', replacedDemoted: true });
   const failed = managerHandoverNote({ replacedManagerUid: 'a', replacedDemoted: false });
   assert.notEqual(done, failed);
+});
+
+test('says nothing when the account record was cleared', () => {
+  assert.equal(removalNote({ accountRemoved: true }), '');
+  assert.equal(removalNote({}), '');
+  assert.equal(removalNote(), '');
+});
+
+test('a leftover sign-in record is described as access already gone, not access kept', () => {
+  // Access is revoked by the membership records either way, so this must not read
+  // as a security failure — it is a tidiness problem with a visible symptom.
+  const note = removalNote({ accountRemoved: false });
+  assert.match(note, /sign-in record could not be cleared/);
+  assert.doesNotMatch(note, /still has access|access to this branch/i);
 });

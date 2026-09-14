@@ -46,7 +46,20 @@
         // only without changing its role. `role` is what loadAccessContext() feeds
         // to resolveRole(), so a self-write able to raise it would hand a signed-in
         // account the manager UI on the strength of its own record alone.
-        ".write": "auth != null && (root.child(newData.child('companyId').val()).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || (newData.child('role').val() == 'staff' && root.child(newData.child('companyId').val()).child('users').child(auth.uid).child('companyRole').val() == 'manager') || (!newData.exists() && data.child('role').val() == 'staff' && root.child(data.child('companyId').val()).child('users').child(auth.uid).child('companyRole').val() == 'manager') || (auth.uid == $uid && data.exists() && newData.child('role').val() == data.child('role').val()))",
+        //
+        // Deleting is the one write where newData is empty, and every other clause
+        // here reads its companyId from newData. That made an owner's delete fail
+        // outright — not because the clause was missing, but because the earlier
+        // clauses had nothing to look up and the whole rule fell over before the
+        // delete case was reached. So the two cases are separated below: a delete
+        // is judged from the record being deleted, and everything else from the
+        // record being written. Each clause reads only a node that exists.
+        //
+        // Without this, removing a team member left the person's account row
+        // behind, still carrying a role for a company they had been taken out of,
+        // and their next sign-in was offered a business to set up instead of a
+        // plain sign-in screen.
+        ".write": "auth != null && (!newData.exists() && (root.child(data.child('companyId').val()).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || (data.child('role').val() == 'staff' && root.child(data.child('companyId').val()).child('users').child(auth.uid).child('companyRole').val() == 'manager')) || newData.exists() && (root.child(newData.child('companyId').val()).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || (newData.child('role').val() == 'staff' && root.child(newData.child('companyId').val()).child('users').child(auth.uid).child('companyRole').val() == 'manager') || (auth.uid == $uid && data.exists() && newData.child('role').val() == data.child('role').val())))",
         // `role` is optional so records written before the role model existed still
         // validate on their next update. When present it must be a known role.
         ".validate": "newData.hasChildren(['uid', 'companyId', 'activeBranchId']) && newData.child('uid').val() == $uid && newData.child('companyId').isString() && newData.child('companyId').val().matches(/^company-[a-z0-9-]+$/) && newData.child('activeBranchId').isString() && (!newData.hasChild('role') || newData.child('role').val() == 'owner' || newData.child('role').val() == 'manager' || newData.child('role').val() == 'staff')"

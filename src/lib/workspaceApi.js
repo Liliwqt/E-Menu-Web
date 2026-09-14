@@ -799,17 +799,27 @@ export async function provisionTeamMember({
  * fail-closed: with no membership row there is no branch role, and with no
  * company record there is no company. The Firebase Auth user is left in place —
  * deleting it needs the Admin SDK, and an auth user with no records can do
- * nothing. Re-inviting the same email will fail until that user is removed from
- * the Firebase console.
+ * nothing.
+ *
+ * The account record is removed too, because leaving it behind leaves the person
+ * signed in to a company they are no longer part of — they keep a role, so the
+ * app shows them a business to set up instead of a plain sign-in screen. That
+ * deletion used to fail against the rules for every owner and was swallowed, so
+ * the caller is told whether it worked rather than having it assumed.
  */
 export async function removeTeamMember({ companyId, branchId, memberUid, isManager }) {
   if (!companyId || !branchId || !memberUid) {
     throw new Error('companyId, branchId and memberUid are required.');
   }
 
+  // Roster and company first: these are the records the rules read, so access is
+  // gone even if the rest of the removal cannot complete.
   await remove(ref(database, `${companyId}/branches/${branchId}/users/${memberUid}`));
-  await remove(ref(database, `${companyId}/users/${memberUid}`)).catch(() => {});
-  await remove(ref(database, `accounts/${memberUid}`)).catch(() => {});
+  await remove(ref(database, `${companyId}/users/${memberUid}`));
+
+  const accountRemoved = await remove(ref(database, `accounts/${memberUid}`))
+    .then(() => true)
+    .catch(() => false);
 
   if (isManager) {
     const managerRef = ref(database, `${companyId}/branches/${branchId}/branchProfile/managerUid`);
@@ -818,6 +828,8 @@ export async function removeTeamMember({ companyId, branchId, memberUid, isManag
       await remove(managerRef);
     }
   }
+
+  return { accountRemoved };
 }
 
 /** The members of a branch, as an array of membership records. */

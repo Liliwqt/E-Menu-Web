@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { ROLE, roleLabel, CAP } from '../lib/permissions';
 import { provisionAuthAccount } from '../lib/firebase';
 import { provisionTeamMember, removeTeamMember, loadBranchMembers } from '../lib/workspaceApi';
-import { managerHandoverNote } from '../lib/teamNotices';
+import { managerHandoverNote, removalNote } from '../lib/teamNotices';
 import '../styles/team.css';
 
 const ROLE_CARDS = [
@@ -137,14 +137,17 @@ export default function TeamPage() {
     setWorking(true);
     setError('');
     try {
-      await removeTeamMember({
+      const { accountRemoved } = await removeTeamMember({
         companyId,
         branchId,
         memberUid: confirmRemove.uid,
         isManager: confirmRemove.role === ROLE.MANAGER,
       });
       setConfirmRemove(null);
-      setNotice(`${confirmRemove.email || 'That account'} no longer has access to this branch.`);
+      setNotice(
+        `${confirmRemove.email || 'That account'} no longer has access to this branch.` +
+        removalNote({ accountRemoved })
+      );
       await refresh();
     } catch (err) {
       setError(err.message || 'Could not remove that member.');
