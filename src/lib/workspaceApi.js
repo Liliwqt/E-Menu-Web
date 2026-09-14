@@ -686,12 +686,26 @@ export async function provisionTeamMember({
 
   // The member's own workspace snapshot. Mirrors the shape onboarding produces so
   // getUserBranch()/canAccessBranch() work unchanged for a non-owner.
+  //
+  // The plan state is read back off the branch rather than taken from the caller.
+  // A workspace carrying `plan` but no `subscriptionStatus` reads as inactive:
+  // isSubscriptionActive() checks the status and falls through to false, so a
+  // manager on a subscribed branch was treated as having no subscription and lost
+  // the AI tools their role grants. The branch profile is the record that knows
+  // whether the branch is actually subscribed, so it is the one to copy.
+  const branchPlan = await get(ref(database, `${companyId}/branches/${branchId}/branchProfile`))
+    .then((snap) => (snap.exists() ? snap.val() : null))
+    .catch(() => null);
+
   const workspace = {
     companyId,
     branchId,
     branchName: branchName || branchId,
     businessName: branchName || branchId,
-    plan,
+    companyName: branchPlan?.companyName || '',
+    plan: branchPlan?.plan || plan,
+    subscriptionStatus: branchPlan?.subscriptionStatus ?? null,
+    trialEndsAt: branchPlan?.trialEndsAt ?? null,
     onboardingComplete: true,
     createdAt: now,
   };
