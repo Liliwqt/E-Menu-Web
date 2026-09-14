@@ -3,9 +3,11 @@ import { Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import { canAccessBranch, getUserBranch, isUserAdmin } from './config/authConfig';
 import { CAP } from './lib/permissions';
+import { ROUTE_DECISION, protectedRouteDecision, setupRouteDecision } from './lib/routeAccess';
 import { BranchDataProvider } from './context/BranchDataContext';
 import LoginPage from './pages/LoginPage';
 import WorkspaceSetupPage from './pages/WorkspaceSetupPage';
+import AccessErrorScreen from './components/ui/AccessErrorScreen';
 
 const DashboardPage = React.lazy(() => import('./pages/DashboardPage'));
 const AnalyticsPage = React.lazy(() => import('./pages/AnalyticsPage'));
@@ -28,38 +30,59 @@ function FullScreenLoader() {
 }
 
 function ProtectedRoute({ children, adminOnly = false }) {
-  const { isAuthenticated, initialLoading, workspaceLoaded, workspace, user } = useAuth();
+  const { isAuthenticated, initialLoading, workspaceLoaded, workspaceStatus, workspace, user } = useAuth();
   const params = useParams();
   const branchId = params.branchId;
+  const isAdmin = isUserAdmin(user?.email);
+  const homeBranchId = getUserBranch(workspace);
 
-  if (initialLoading) return <FullScreenLoader />;
-  if (!isAuthenticated) return <Navigate to="/" replace />;
+  // The ordering that decides this is in routeAccess.js, where a test can pin it
+  // down. In particular: a read that failed must reach the retry screen rather
+  // than the setup form, which writes a new company.
+  const decision = protectedRouteDecision({
+    initialLoading,
+    isAuthenticated,
+    isAdmin,
+    workspaceLoaded,
+    workspaceStatus,
+    adminOnly,
+    workspace,
+    branchId,
+    canAccessBranch,
+  });
 
-  const email = user?.email;
-  if (isUserAdmin(email)) return children;
-  if (!workspaceLoaded) return <FullScreenLoader />;
-  if (adminOnly) return <Navigate to="/" replace />;
-
-  if (!workspace?.onboardingComplete) return <Navigate to="/setup" replace />;
-
-  const workspaceBranch = getUserBranch(workspace);
-  if (branchId && !canAccessBranch(workspace, branchId)) {
-    return <Navigate to={`/home/${workspaceBranch}`} replace />;
+  if (decision === ROUTE_DECISION.LOADING) return <FullScreenLoader />;
+  if (decision === ROUTE_DECISION.LOGIN) return <Navigate to="/" replace />;
+  if (decision === ROUTE_DECISION.ACCESS_ERROR) return <AccessErrorScreen />;
+  if (decision === ROUTE_DECISION.SETUP) return <Navigate to="/setup" replace />;
+  if (decision === ROUTE_DECISION.REDIRECT_HOME) {
+    return <Navigate to={`/home/${homeBranchId}`} replace />;
   }
 
   return children;
 }
 
 function SetupRoute() {
-  const { isAuthenticated, initialLoading, workspaceLoaded, workspace, user } = useAuth();
-  if (initialLoading || (isAuthenticated && !workspaceLoaded && !isUserAdmin(user?.email))) {
-    return <FullScreenLoader />;
-  }
-  if (!isAuthenticated) return <Navigate to="/" replace />;
-  if (isUserAdmin(user?.email)) return <Navigate to="/home-admin" replace />;
-  if (workspace?.onboardingComplete) {
+  const { isAuthenticated, initialLoading, workspaceLoaded, workspaceStatus, workspace, user } = useAuth();
+  const isAdmin = isUserAdmin(user?.email);
+
+  const decision = setupRouteDecision({
+    initialLoading,
+    isAuthenticated,
+    isAdmin,
+    workspaceLoaded,
+    workspaceStatus,
+    workspace,
+  });
+
+  if (decision === ROUTE_DECISION.LOADING) return <FullScreenLoader />;
+  if (decision === ROUTE_DECISION.LOGIN) return <Navigate to="/" replace />;
+  if (decision === ROUTE_DECISION.ADMIN_HOME) return <Navigate to="/home-admin" replace />;
+  if (decision === ROUTE_DECISION.ACCESS_ERROR) return <AccessErrorScreen />;
+  if (decision === ROUTE_DECISION.REDIRECT_HOME) {
     return <Navigate to={`/home/${workspace.branchId}`} replace />;
   }
+
   return <WorkspaceSetupPage />;
 }
 

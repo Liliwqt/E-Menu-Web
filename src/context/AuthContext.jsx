@@ -22,6 +22,7 @@ import {
   deleteBranchToWorkspace,
 } from '../lib/workspaceApi';
 import { ROLE, can as canCap } from '../lib/permissions';
+import { ACCESS_STATUS, resolveAccessStatus } from '../lib/accessStatus.js';
 
 const AuthContext = createContext(null);
 
@@ -65,16 +66,72 @@ export function AuthProvider({ children }) {
   const [nicknameLoaded, setNicknameLoaded] = useState(false);
   const [workspace, setWorkspace] = useState(null);
   const [workspaceLoaded, setWorkspaceLoaded] = useState(false);
+  // 'loading' | 'ready' | 'none' | 'error' — see accessStatus.js. Kept separate
+  // from `workspace` because a null workspace means two opposite things: a new
+  // account that needs onboarding, or a read that never completed.
+  const [workspaceStatus, setWorkspaceStatus] = useState(ACCESS_STATUS.LOADING);
   const [role, setRole] = useState(null);
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  /**
+   * Loads everything a session needs: the workspace snapshot and the effective
+   * role.
+   *
+   * The three outcomes are kept apart deliberately. A missing workspace is a new
+   * account and belongs in onboarding; a read that failed is an infrastructure
+   * problem and must never be read as the former, because the onboarding form
+   * creates a company — a dropped connection would have offered an existing
+   * owner a second one, under a fresh id, with their real data left behind.
+   *
+   * Reported as a status rather than a bare null so the router can tell them
+   * apart. Roles stay fail-closed either way: a failed read grants nothing.
+   */
+  const hydrateAccess = useCallback(async (firebaseUser) => {
+    setWorkspaceLoaded(false);
+    setWorkspaceStatus('loading');
+    try {
+      const [userNickname, access] = await Promise.all([
+        loadUserNickname(firebaseUser.uid),
+        loadAccessContext(firebaseUser.uid, firebaseUser.email),
+      ]);
+      const currentWorkspace = access?.workspace || null;
+      setNickname(userNickname || '');
+      setWorkspace(currentWorkspace);
+      setRole(access?.role || null);
+      setWorkspaceStatus(resolveAccessStatus({ loadFailed: false, workspace: currentWorkspace }));
+      if (currentWorkspace?.companyId) {
+        update(ref(database, `${currentWorkspace.companyId}/users/${firebaseUser.uid}`), {
+          email: firebaseUser.email || '',
+          displayName: firebaseUser.displayName || '',
+          photoURL: firebaseUser.photoURL || '',
+          provider: detectProvider(firebaseUser),
+          updatedAt: serverTimestamp(),
+        }).catch((err) => console.error('Failed to update company user profile:', err));
+      }
+    } catch (err) {
+      console.error('Error loading account access:', err);
+      setWorkspace(null);
+      setRole(null);
+      setWorkspaceStatus(resolveAccessStatus({ loadFailed: true }));
+    } finally {
+      setNicknameLoaded(true);
+      setWorkspaceLoaded(true);
+      setInitialLoading(false);
+    }
+  }, []);
+
+  /** Re-runs the load, for the retry on the access error screen. */
+  const reloadAccess = useCallback(() => {
+    if (!auth.currentUser) return Promise.resolve();
+    return hydrateAccess(auth.currentUser);
+  }, [hydrateAccess]);
+
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((firebaseUser) => {
       if (firebaseUser) {
         setNicknameLoaded(false);
-        setWorkspaceLoaded(false);
         setNickname('');
         const userData = {
           uid: firebaseUser.uid,
@@ -86,40 +143,14 @@ export function AuthProvider({ children }) {
         setUser(userData);
         localStorage.setItem(AUTH_KEY, JSON.stringify(userData));
 
-        Promise.all([
-          loadUserNickname(firebaseUser.uid),
-          loadAccessContext(firebaseUser.uid, firebaseUser.email),
-        ])
-          .then(([userNickname, access]) => {
-            const currentWorkspace = access?.workspace || null;
-            setNickname(userNickname || '');
-            setWorkspace(currentWorkspace);
-            setRole(access?.role || null);
-            if (currentWorkspace?.companyId) {
-              update(ref(database, `${currentWorkspace.companyId}/users/${firebaseUser.uid}`), {
-                email: firebaseUser.email || '',
-                displayName: firebaseUser.displayName || '',
-                photoURL: firebaseUser.photoURL || '',
-                provider: detectProvider(firebaseUser),
-                updatedAt: serverTimestamp(),
-              }).catch((err) => console.error('Failed to update company user profile:', err));
-            }
-          })
-          .catch((err) => {
-            console.error('Error loading account workspace:', err);
-            setWorkspace(null);
-          })
-          .finally(() => {
-            setNicknameLoaded(true);
-            setWorkspaceLoaded(true);
-            setInitialLoading(false);
-          });
+        hydrateAccess(firebaseUser);
       } else {
         setUser(null);
         setNickname('');
         setNicknameLoaded(false);
         setWorkspace(null);
         setWorkspaceLoaded(true);
+        setWorkspaceStatus(ACCESS_STATUS.NONE);
         setRole(null);
         localStorage.removeItem(AUTH_KEY);
         sessionStorage.removeItem(AI_SHIFT_HANDOFF_COMPLETED);
@@ -352,6 +383,8 @@ export function AuthProvider({ children }) {
         nicknameLoaded,
         workspace,
         workspaceLoaded,
+        workspaceStatus,
+        reloadAccess,
         role,
         can,
         isOwner: role === ROLE.OWNER,
