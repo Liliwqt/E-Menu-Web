@@ -198,7 +198,8 @@ export default function App() {
         <Route path="/analytics-history/:branchId" element={branchRoute(HistoryPage, CAP.CORRECT_ANALYTICS)} />
         <Route path="/kiosks/:branchId" element={branchRoute(KiosksPage, CAP.MANAGE_KIOSKS)} />
         <Route path="/team/:branchId" element={branchRoute(TeamPage, CAP.MANAGE_STAFF)} />
-        <Route path="/subscription/:branchId" element={branchRoute(SubscriptionPage, CAP.MANAGE_BILLING)} />
+        {/* Members can read the branch plan; SubscriptionPage gates changes to the owner. */}
+        <Route path="/subscription/:branchId" element={branchRoute(SubscriptionPage)} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>

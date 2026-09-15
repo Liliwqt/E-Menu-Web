@@ -37,7 +37,7 @@ const NAV_INSIGHTS = [
 const NAV_SETTINGS = [
   { key: 'team', label: 'Team', icon: Users, path: (b) => `/team/${b}`, cap: CAP.MANAGE_STAFF },
   { key: 'kiosks', label: 'Kiosks', icon: Monitor, path: (b) => `/kiosks/${b}`, cap: CAP.MANAGE_KIOSKS },
-  { key: 'subscription', label: 'Subscription', icon: CreditCard, path: (b) => `/subscription/${b}`, cap: CAP.MANAGE_BILLING },
+  { key: 'subscription', label: 'Subscription', icon: CreditCard, path: (b) => `/subscription/${b}` },
 ];
 
 // Bottom bar shows the four daily tools plus a "More" entry that opens the rest.

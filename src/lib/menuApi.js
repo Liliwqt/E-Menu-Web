@@ -380,9 +380,14 @@ export async function saveUserNickname(uid, email, nickname) {
   if (!uid) return;
   try {
     const accountRes = await fetchWithAppCheck(baseDbUrl(`accounts/${uid}`));
+    if (!accountRes.ok) {
+      throw new Error(
+        'The database refused this change — this account may not have permission for it.'
+      );
+    }
     const account = await accountRes.json();
     if (!account?.companyId) throw new Error('Company account is not configured.');
-    await fetchWithAppCheck(baseDbUrl(`${account.companyId}/users/${uid}/nickname`), {
+    await menuWrite(baseDbUrl(`${account.companyId}/users/${uid}/nickname`), {
       method: 'PUT',
       body: JSON.stringify(nickname),
       headers: { 'Content-Type': 'application/json' },
@@ -482,7 +487,7 @@ export async function deleteLogToBin(branchId, orderNum, logData) {
 // Clear all deleted logs
 export async function clearDeletedLogs(branchId) {
   try {
-    await fetchWithAppCheck(dbUrl('deletedLogs', branchId), {
+    await menuWrite(dbUrl('deletedLogs', branchId), {
       method: 'DELETE',
     });
   } catch (e) {
