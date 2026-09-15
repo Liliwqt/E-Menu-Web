@@ -27,6 +27,19 @@ function dbUrl(path, branchId) {
  * Reads deliberately keep calling fetchWithAppCheck directly: a node that is not
  * there is an ordinary answer, not a failure.
  */
+/**
+ * The single voice for a refused write.
+ *
+ * Two paths used to own this copy independently (menuWrite's throw and
+ * saveUserNickname's read rejection). One helper so a rewording can never
+ * fix one and orphan the other.
+ */
+export function refusedChangeError() {
+  return new Error(
+    'The database refused this change — this account may not have permission for it.'
+  );
+}
+
 async function menuWrite(url, options = {}) {
   const res = await fetchWithAppCheck(url, options);
   if (res.ok) return res;
@@ -40,11 +53,9 @@ async function menuWrite(url, options = {}) {
   }
 
   const refused = res.status === 401 || res.status === 403;
-  const error = new Error(
-    refused
-      ? 'The database refused this change — this account may not have permission for it.'
-      : `The change could not be saved (HTTP ${res.status}).`
-  );
+  const error = refused
+    ? refusedChangeError()
+    : new Error(`The change could not be saved (HTTP ${res.status}).`);
   error.status = res.status;
   error.detail = detail;
   throw error;
@@ -381,9 +392,7 @@ export async function saveUserNickname(uid, email, nickname) {
   try {
     const accountRes = await fetchWithAppCheck(baseDbUrl(`accounts/${uid}`));
     if (!accountRes.ok) {
-      throw new Error(
-        'The database refused this change — this account may not have permission for it.'
-      );
+      throw refusedChangeError();
     }
     const account = await accountRes.json();
     if (!account?.companyId) throw new Error('Company account is not configured.');

@@ -25,9 +25,12 @@ import { fileURLToPath } from 'node:url';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const menuApi = fs.readFileSync(path.join(here, 'menuApi.js'), 'utf8');
 
-/** The body of one exported function, from its declaration to the next one. */
+/** The body of one function, from its declaration to the next one. */
 function functionBody(name) {
-  const start = menuApi.indexOf(`export async function ${name}(`);
+  const start =
+    menuApi.indexOf(`export async function ${name}(`) !== -1
+      ? menuApi.indexOf(`export async function ${name}(`)
+      : menuApi.indexOf(`async function ${name}(`);
   assert.notEqual(start, -1, `${name} should exist in menuApi.js`);
   const rest = menuApi.slice(start);
   const next = rest.slice(1).search(/\nexport (async )?function |\n\/\*\*\//);
@@ -48,4 +51,17 @@ test('saving a nickname surfaces a refused account read instead of blaming the c
 test('clearing the trash surfaces a refusal instead of reporting an empty bin', () => {
   const body = functionBody('clearDeletedLogs');
   assert.match(body, /menuWrite\(/, 'the trash clear must go through menuWrite');
+});
+
+test('every refused write speaks with one voice', () => {
+  // The refusal message is user-facing copy with two owners (menuWrite's throw
+  // and saveUserNickname's read rejection). If they drift, one path tells the
+  // user they were refused while the other blames something else — the same
+  // silent mismatch this file guards against. Both must come from one helper.
+  assert.match(menuApi, /export function refusedChangeError\(/,
+    'the refusal must come from one shared helper');
+  for (const name of ['menuWrite', 'saveUserNickname']) {
+    assert.match(functionBody(name), /refusedChangeError\(\)/,
+      `${name} must refuse through the shared helper`);
+  }
 });
