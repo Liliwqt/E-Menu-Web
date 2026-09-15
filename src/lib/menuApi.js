@@ -150,8 +150,10 @@ async function applyInventoryCleanup(branchId, plan) {
   if (plan.move) {
     await attempt(`move ${plan.move.from} -> ${plan.move.to}`, async () => {
       const fromRes = await fetchWithAppCheck(dbUrl(plan.move.from, branchId));
+      if (!fromRes.ok) throw new Error('Could not read source inventory.');
       const moved = await fromRes.json();
       const toRes = await fetchWithAppCheck(dbUrl(plan.move.to, branchId));
+      if (!toRes.ok) throw new Error('Could not read destination inventory.');
       const existing = await toRes.json();
 
       const merged = mergeRenamedInventory({
@@ -169,6 +171,8 @@ async function applyInventoryCleanup(branchId, plan) {
       });
     });
   }
+
+  if (plan.move && !cleared) return false;
 
   for (const path of plan.remove) {
     await attempt(`clear ${path}`, () => (
@@ -220,7 +224,7 @@ export async function renameCategory(branchId, oldName, newName) {
   // under the old name disconnects it: the renamed category is handed fresh
   // default rows by the inventory sync, while the real counts sit under a heading
   // that no longer exists on the menu.
-  await applyInventoryCleanup(
+  const inventoryCleared = await applyInventoryCleanup(
     branchId,
     inventoryCleanupPlan({
       op: MENU_INVENTORY_OP.CATEGORY_RENAME,
@@ -230,6 +234,7 @@ export async function renameCategory(branchId, oldName, newName) {
   );
 
   await addMenuLog(branchId, `Renamed category: ${oldName} → ${trimmedNew}`);
+  return { inventoryCleared };
 }
 
 export async function addItemToFirebase(branchId, category, itemId, item) {
@@ -295,6 +300,15 @@ export async function deleteItem(branchId, category, itemKey) {
   });
   await addMenuLog(branchId, `Deleted item: ${itemKey} from ${category}`);
   return { inventoryCleared };
+}
+
+// Patch only availability so staff cannot overwrite pricing or menu content.
+export async function setItemAvailability(branchId, category, itemKey, available) {
+  await menuWrite(dbUrl(`categories/${category}/${itemKey}`, branchId), {
+    method: 'PATCH',
+    body: JSON.stringify({ available: Boolean(available), manualUnavailable: !available }),
+    headers: { 'Content-Type': 'application/json' },
+  });
 }
 
 export async function updateItem(branchId, category, itemKey, item) {

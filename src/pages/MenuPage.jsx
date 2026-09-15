@@ -9,7 +9,7 @@ import { useBranchData } from '../context/BranchDataContext';
 import { useAuth } from '../context/AuthContext';
 import {
   onCategoriesChange, addCategory, removeCategory, renameCategory,
-  addItemToFirebase, updateItem, deleteItem, setBestSeller,
+  addItemToFirebase, updateItem, deleteItem, setBestSeller, setItemAvailability,
   compressImage, updateImageInFirebase, onMenuLogsChange,
 } from '../lib/menuApi';
 import { CAP } from '../lib/permissions';
@@ -286,8 +286,8 @@ export default function MenuPage() {
       const result = await fn();
       if (result?.inventoryCleared === false) {
         setNotice(
-          'The change was saved, but its stock record could not be removed and may '
-          + 'still appear on the Inventory screen.'
+          'The menu change was saved, but stock cleanup was incomplete. '
+          + 'Check the Inventory screen before making further stock changes.'
         );
       }
     } catch (e) {
@@ -482,7 +482,7 @@ export default function MenuPage() {
                               <button
                                 className="btn btn--ghost btn--sm"
                                 title={available ? 'Mark sold out' : 'Mark available'}
-                                onClick={() => run('avail', () => updateItem(branchId, cat, key, { ...item, available: !available }))}
+                                onClick={() => run('avail', () => setItemAvailability(branchId, cat, key, !available))}
                                 aria-label={available ? `Mark ${item.name} sold out` : `Mark ${item.name} available`}
                               >
                                 {available ? <EyeOff size={13} /> : <Eye size={13} />}

@@ -152,7 +152,19 @@
             ".read": "auth != null && (root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).exists() || root.child($companyId).child('branches').child($branchId).child('kiosks').child(auth.uid).child('isActive').val() == true)",
             // Menu edits (including category delete, which takes every item with
             // it) are manager-and-above. Staff cannot reach this node.
-            ".write": "auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid || root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'manager')"
+            ".write": "auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid || root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'manager')",
+            "$category": {
+              "$item": {
+                "available": {
+                  ".write": "auth != null && root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'staff' && data.parent().child('name').isString() && newData.isBoolean()",
+                  ".validate": "newData.isBoolean()"
+                },
+                "manualUnavailable": {
+                  ".write": "auth != null && root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'staff' && data.parent().child('name').isString() && newData.isBoolean()",
+                  ".validate": "newData.isBoolean()"
+                }
+              }
+            }
           },
           "inventory": {
             ".read": "auth != null && (root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).exists() || root.child($companyId).child('branches').child($branchId).child('kiosks').child(auth.uid).child('isActive').val() == true)",

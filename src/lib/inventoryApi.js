@@ -465,7 +465,7 @@ export async function syncMenuAvailabilityFromData(branchId, categoriesData, inv
       });
 
       const stock = hasSizes ? totalStock : 1;
-      const shouldBeAvailable = stock > 0;
+      const shouldBeAvailable = stock > 0 && menuData.manualUnavailable !== true;
 
       if (isMenuAvailable(menuData) !== shouldBeAvailable) {
         updates[`${catName}/${itemId}/available`] = shouldBeAvailable;
