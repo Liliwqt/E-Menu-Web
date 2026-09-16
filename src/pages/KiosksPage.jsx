@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Monitor, RefreshCw, Power, AlertTriangle, Plus, X } from 'lucide-react';
-import { ref, onValue, off, update, serverTimestamp } from 'firebase/database';
+import { ref, onValue, off } from 'firebase/database';
 import { database, branchDataPath } from '../lib/firebase';
 import { useBranchData } from '../context/BranchDataContext';
 import { useAuth } from '../context/AuthContext';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { isSubscriptionActive, FEATURE, hasFeature } from '../lib/planFeatures';
-import { deregisterKiosk, registerKiosk } from '../lib/workspaceApi';
+import { deregisterKiosk, registerKiosk, setKioskActive } from '../lib/workspaceApi';
 import { CAP } from '../lib/permissions';
 import '../styles/kiosks.css';
 
@@ -54,19 +54,15 @@ export default function KiosksPage() {
   }, [branchId]);
 
   async function handleToggleActive(kioskUid, currentlyActive) {
+    if (!user?.uid) return;
     setError('');
     setWorkingUid(kioskUid);
     try {
-      await update(ref(database, `${branchDataPath(branchId)}/kiosks/${kioskUid}`), {
-        isActive: !currentlyActive,
-        lastActiveAt: serverTimestamp(),
-      });
-      if (user?.uid) {
-        await update(ref(database, `${workspace.companyId}/users/${user.uid}/kiosks/${kioskUid}`), {
-          isActive: !currentlyActive,
-          lastActiveAt: serverTimestamp(),
-        });
-      }
+      // Enable used to write only the branch and member records, leaving the root
+      // pointer the tablet reads switched off — so the row said Active while the
+      // device could never enrol itself again. One helper turns all four records
+      // the same way, in both directions.
+      await setKioskActive(user.uid, branchId, kioskUid, !currentlyActive);
     } catch (err) {
       setError(err.message || 'Could not update kiosk status.');
     } finally {
@@ -74,10 +70,9 @@ export default function KiosksPage() {
     }
   }
 
-  // Which kiosk is awaiting confirmation. Deregistering cannot be undone from
-  // here, so it asks first — in the page, because the browser dialog this used
-  // to call is refused in a sandboxed frame and returns false in the Android
-  // WebView, where the kiosk admin screen actually runs.
+  // Which kiosk is awaiting confirmation. It is asked in the page, because the
+  // browser dialog this used to call is refused in a sandboxed frame and returns
+  // false in the Android WebView, where the kiosk admin screen actually runs.
   const [confirmDeregister, setConfirmDeregister] = useState(null);
 
   async function handleDeregister(kioskUid) {
@@ -261,9 +256,9 @@ export default function KiosksPage() {
         tone="danger"
         title="Deregister this kiosk?"
         message={
-          'The tablet will need to be set up again before it can take orders. '
+          'The tablet stops taking orders immediately and will not enrol itself again until this kiosk is enabled. '
           + `${confirmDeregister?.name ? `"${confirmDeregister.name}" ` : 'This kiosk '}`
-          + 'stops working immediately.'
+          + 'stays in this list as Disabled, and Enable lets it back in.'
         }
         confirmLabel="Deregister"
         workingLabel="Deregistering…"

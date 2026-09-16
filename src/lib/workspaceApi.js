@@ -553,26 +553,60 @@ export async function registerKiosk(uid, branchId, kioskName, kioskUid) {
   });
 }
 
-export async function deregisterKiosk(uid, branchId, kioskUid) {
+/**
+ * Turns a registered kiosk on or off across every record the enrolment uses.
+ *
+ * A kiosk is not one record but four: the branch's device list (what the Kiosks
+ * page draws), the registering member's own copy, the company's enrolment record,
+ * and the tiny root pointer a tablet reads before it knows its company. The device
+ * consults only the last one — AuthManager.loadEnrollment() asks
+ * `kioskEnrollments/{uid}` for `isActive` and configures a branch only when it is
+ * true — while the order rules consult the branch record, since a kiosk may write
+ * an order only while `branches/{branchId}/kiosks/{uid}/isActive` is true.
+ *
+ * Deregistering wrote all four off. Enabling wrote two of them back, so the root
+ * pointer stayed false: the page showed the kiosk Active while the tablet could no
+ * longer find its branch, and nothing short of pasting its UID into the register
+ * form again would fix it. Both directions now go through this one switch, which is
+ * what makes "Deregister" something the page can also undo.
+ *
+ * No rule changes are needed for the extra two writes: they are allowed for exactly
+ * the roles that may already write the branch record (the branch's owner or manager,
+ * or the company owner), which is the same set `registerKiosk` writes them with.
+ */
+export async function setKioskActive(uid, branchId, kioskUid, isActive) {
   if (!uid || !branchId || !kioskUid) return;
   const workspace = await loadWorkspace(uid);
+  const active = Boolean(isActive);
+  const now = serverTimestamp();
+
+  // The branch record first: it is the one the order rules read, so the lockout
+  // (or the restoration) starts at the first write rather than the last.
   await update(ref(database, `${branchPath(workspace?.companyId, branchId)}/kiosks/${kioskUid}`), {
-    isActive: false,
-    lastActiveAt: serverTimestamp(),
+    isActive: active,
+    lastActiveAt: now,
   });
   await update(ref(database, `${workspace.companyId}/users/${uid}/kiosks/${kioskUid}`), {
-    isActive: false,
-    lastActiveAt: serverTimestamp(),
+    isActive: active,
+    lastActiveAt: now,
   });
+  // Full enrolment record, informational for the portal: nothing reads its isActive.
   await update(ref(database, `${workspace.companyId}/kioskEnrollments/${kioskUid}`), {
-    isActive: false,
-    lastActiveAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
+    isActive: active,
+    lastActiveAt: now,
+    updatedAt: now,
   });
+  // The root pointer the tablet itself reads. `false` here — or a deleted node —
+  // leaves a restarting kiosk at PENDING_REGISTRATION showing its UID, which is
+  // what "deregistered" has to mean for the device.
   await update(ref(database, `kioskEnrollments/${kioskUid}`), {
-    isActive: false,
-    updatedAt: serverTimestamp(),
+    isActive: active,
+    updatedAt: now,
   });
+}
+
+export async function deregisterKiosk(uid, branchId, kioskUid) {
+  await setKioskActive(uid, branchId, kioskUid, false);
 }
 
 export async function upgradeToSubscription(uid, branchId) {

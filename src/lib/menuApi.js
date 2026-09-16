@@ -491,13 +491,19 @@ export async function deleteLogToBin(branchId, orderNum, logData) {
   }
 
   try {
-    // 1. Write to deletedLogs
-    await fetchWithAppCheck(dbUrl(`deletedLogs/${orderNum}`, branchId), {
+    // 1. Write to deletedLogs. This is the half the rules can refuse (owner, branch
+    // owner or manager), and it used to resolve either way: a refused copy looked
+    // exactly like a move that worked, so the page reported an order in the bin that
+    // was never put there. menuWrite() reports the refusal.
+    await menuWrite(dbUrl(`deletedLogs/${orderNum}`, branchId), {
       method: 'PUT',
       body: JSON.stringify(logData),
       headers: { 'Content-Type': 'application/json' },
     });
-    // 2. Delete from logs
+    // 2. Delete from logs. Its refusal is deliberate and stays unguarded: the `logs`
+    // rule requires !data.exists(), so the ledger row is meant to stay put and the
+    // order keeps counting in analytics until it is excluded in Order History.
+    // Checking this step would report a working move as a failure.
     await fetchWithAppCheck(dbUrl(`logs/${orderNum}`, branchId), {
       method: 'DELETE',
     });
@@ -526,11 +532,19 @@ export async function addMenuLog(branchId, action) {
   const email = auth.currentUser?.email || 'unknown';
   const entry = { email, action, timestamp: Date.now() };
   try {
-    await fetchWithAppCheck(dbUrl('menuLogs', branchId), {
+    const res = await fetchWithAppCheck(dbUrl('menuLogs', branchId), {
       method: 'POST',
       body: JSON.stringify(entry),
       headers: { 'Content-Type': 'application/json' },
     });
+    if (!res.ok) {
+      // An audit line, not the change itself. The menu edit this records has already
+      // been written, so a refused log must not be reported as that edit failing —
+      // but it must not disappear quietly either, which is what ignoring the status
+      // did. Staff cannot write menuLogs, so a refusal here is a missing trail, and
+      // the console is the only place that can say so without blaming the edit.
+      console.error(`Menu log refused (HTTP ${res.status}): "${action}" was not recorded in menuLogs.`);
+    }
   } catch (e) {
     console.error('Error writing menu log:', e);
   }

@@ -17,9 +17,14 @@ import { fileURLToPath } from 'node:url';
  *
  * These read the source rather than running it (same heuristic trade as
  * menuInventoryWiring.test.js): they catch the call going missing, not the
- * call being wrong. deleteLogToBin and addMenuLog are deliberately excluded —
- * the first one's refusal is intended by the rules (deleted orders stay
- * counted), and the second is an audit write that must stay non-fatal.
+ * call being wrong.
+ *
+ * deleteLogToBin and addMenuLog are not exempt from this either, they just need
+ * different answers. Moving an order to the bin is two writes: the copy into
+ * `deletedLogs` can be refused and must be reported, while the delete from the
+ * append-only `logs` ledger is refused *by design* and must not be. An audit log
+ * is the opposite case again — a refusal must not fail the edit it records, so it
+ * is reported to the console instead of thrown.
  */
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -64,4 +69,26 @@ test('every refused write speaks with one voice', () => {
     assert.match(functionBody(name), /refusedChangeError\(\)/,
       `${name} must refuse through the shared helper`);
   }
+});
+
+test('a refused move to the bin is reported, not shown as a successful one', () => {
+  const body = functionBody('deleteLogToBin');
+  // The copy into deletedLogs is the write that can be turned down. Ignoring its
+  // status let the page report an order in the bin that was never put there.
+  assert.match(body, /await menuWrite\(dbUrl\(`deletedLogs\//,
+    'the copy into the bin must go through menuWrite');
+  // The ledger delete that follows must stay a plain call. The `logs` rule
+  // requires !data.exists(), so it is refused on purpose: the order keeps counting
+  // in analytics until it is excluded in Order History. Throwing here would report
+  // a working move as a failed one.
+  assert.match(body, /await fetchWithAppCheck\(dbUrl\(`logs\//,
+    'the deliberate ledger denial must stay deliberate');
+});
+
+test('a refused audit log is reported without failing the edit it records', () => {
+  const body = functionBody('addMenuLog');
+  assert.match(body, /if\s*\(\s*!res\.ok\s*\)/,
+    'the audit write must read its response');
+  assert.doesNotMatch(body, /throw |refusedChangeError/,
+    'an audit write must never fail the change it records');
 });
