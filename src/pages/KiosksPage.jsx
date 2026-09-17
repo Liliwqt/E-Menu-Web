@@ -1,3 +1,5 @@
+import { useSubscription } from '../context/SubscriptionContext';
+import SubscriptionStatus from '../components/ui/SubscriptionStatus';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Monitor, RefreshCw, Power, AlertTriangle, Plus, X } from 'lucide-react';
@@ -28,12 +30,13 @@ export default function KiosksPage() {
   const { branchId } = useBranchData();
   const navigate = useNavigate();
   const { user, workspace, can } = useAuth();
-  const subscriptionActive = isSubscriptionActive(workspace);
+  const { billing, status } = useSubscription();
+  const subscriptionActive = isSubscriptionActive(billing);
   // Two separate questions, both required: the plan has to include multi-kiosk,
   // and the role has to be allowed to manage devices. hasFeature() alone was
   // only ever the first one, so a staff account on a subscribed branch saw the
   // register, enable/disable and deregister controls.
-  const canManage = can(CAP.MANAGE_KIOSKS) && hasFeature(workspace, FEATURE.MULTI_KIOSK);
+  const canManage = can(CAP.MANAGE_KIOSKS) && hasFeature(billing, FEATURE.MULTI_KIOSK);
   const [kiosks, setKiosks] = useState({});
   const [loading, setLoading] = useState(true);
   const [workingUid, setWorkingUid] = useState(null);
@@ -109,6 +112,8 @@ export default function KiosksPage() {
 
   const kioskList = Object.entries(kiosks).map(([uid, data]) => ({ uid, ...data }));
   const activeCount = kioskList.filter((k) => k.isActive).length;
+
+  if (status !== 'ready') return <div className="ks"><h1>Kiosks</h1><SubscriptionStatus /></div>;
 
   return (
     <div className="ks">

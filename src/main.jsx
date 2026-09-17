@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App';
+import { SubscriptionProvider } from './context/SubscriptionContext';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { LiveAnalystProvider } from './context/LiveAnalystProvider';
@@ -24,9 +25,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       <BrowserRouter>
         <ThemeProvider>
           <AuthProvider>
-            <LiveAnalystProvider>
-              <App />
-            </LiveAnalystProvider>
+            <SubscriptionProvider>
+              <LiveAnalystProvider>
+                <App />
+              </LiveAnalystProvider>
+            </SubscriptionProvider>
           </AuthProvider>
         </ThemeProvider>
       </BrowserRouter>

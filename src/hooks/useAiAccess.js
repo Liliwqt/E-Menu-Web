@@ -1,10 +1,12 @@
+import { useSubscription } from '../context/SubscriptionContext';
 import { useAuth } from '../context/AuthContext';
 import { isAiEnabled } from '../lib/workspaceApi';
 import { aiAccessDenial, canUseAi } from '../lib/aiAccess';
 import { CAP } from '../lib/permissions';
 
 function resolveAiAccess() {
-  const { can, workspace } = useAuth();
+  const { can } = useAuth();
+  const { billing: workspace } = useSubscription();
   return {
     allowed: canUseAi({ can, workspace, isAiEnabled }),
     deniedBy: aiAccessDenial({

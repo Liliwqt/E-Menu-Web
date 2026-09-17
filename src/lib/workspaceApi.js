@@ -616,19 +616,13 @@ export async function upgradeToSubscription(uid, branchId) {
   const now = serverTimestamp();
   const trialEndsAt = Date.now() + TRIAL_DURATION_MS;
 
-  await update(ref(database, `${workspace.companyId}/users/${uid}/workspace`), {
-    plan: PLAN_SUBSCRIPTION,
-    subscriptionStatus: SUBSCRIPTION_STATUS.TRIALING,
-    trialEndsAt,
-    updatedAt: now,
-  });
-
-  await update(ref(database, `${path}/branchProfile`), {
-    plan: PLAN_SUBSCRIPTION,
-    subscriptionStatus: SUBSCRIPTION_STATUS.TRIALING,
-    trialEndsAt,
-    updatedAt: now,
-  });
+  const billing = { plan: PLAN_SUBSCRIPTION, subscriptionStatus: SUBSCRIPTION_STATUS.TRIALING, trialEndsAt, updatedAt: now };
+  const updates = {};
+  for (const [field, value] of Object.entries(billing)) {
+    updates[`${workspace.companyId}/users/${uid}/workspace/${field}`] = value;
+    updates[`${path}/branchProfile/${field}`] = value;
+  }
+  await update(ref(database), updates);
 
   return loadWorkspace(uid);
 }
@@ -639,19 +633,13 @@ export async function downgradeToFree(uid, branchId) {
   const path = branchPath(workspace?.companyId, branchId);
   const now = serverTimestamp();
 
-  await update(ref(database, `${workspace.companyId}/users/${uid}/workspace`), {
-    plan: PLAN_FREE,
-    subscriptionStatus: SUBSCRIPTION_STATUS.INACTIVE,
-    trialEndsAt: null,
-    updatedAt: now,
-  });
-
-  await update(ref(database, `${path}/branchProfile`), {
-    plan: PLAN_FREE,
-    subscriptionStatus: SUBSCRIPTION_STATUS.INACTIVE,
-    trialEndsAt: null,
-    updatedAt: now,
-  });
+  const billing = { plan: PLAN_FREE, subscriptionStatus: SUBSCRIPTION_STATUS.INACTIVE, trialEndsAt: null, updatedAt: now };
+  const updates = {};
+  for (const [field, value] of Object.entries(billing)) {
+    updates[`${workspace.companyId}/users/${uid}/workspace/${field}`] = value;
+    updates[`${path}/branchProfile/${field}`] = value;
+  }
+  await update(ref(database), updates);
 
   return loadWorkspace(uid);
 }

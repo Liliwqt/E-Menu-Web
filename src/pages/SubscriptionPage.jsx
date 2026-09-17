@@ -1,3 +1,5 @@
+import { useSubscription } from '../context/SubscriptionContext';
+import SubscriptionStatus from '../components/ui/SubscriptionStatus';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Check, Sparkles, Loader2 } from 'lucide-react';
@@ -50,7 +52,7 @@ const PLANS = [
 export default function SubscriptionPage() {
   const { branchId } = useBranchData();
   const navigate = useNavigate();
-  const { user, workspace, setWorkspaceFromProps, can } = useAuth();
+  const { user, setWorkspaceFromProps, can } = useAuth();
   // Billing is the company owner's call. Managers and staff can read what the
   // branch is on, which is useful when a feature is locked, but cannot change it.
   const canManageBilling = can(CAP.MANAGE_BILLING);
@@ -61,12 +63,13 @@ export default function SubscriptionPage() {
   const [working, setWorking] = useState(false);
   const [error, setError] = useState('');
 
-  const subscriptionActive = isSubscriptionActive(workspace);
-  const trialEnding = isTrialEndingSoon(workspace, 3);
-  const daysLeft = trialDaysRemaining(workspace);
+  const { billing, status } = useSubscription();
+  const subscriptionActive = isSubscriptionActive(billing);
+  const trialEnding = isTrialEndingSoon(billing, 3);
+  const daysLeft = trialDaysRemaining(billing);
 
   async function handleUpgrade() {
-    if (!user?.uid || !branchId || !canManageBilling) return;
+    if (!user?.uid || !branchId || !canManageBilling || status !== 'ready') return;
     setError('');
     setWorking(true);
     try {
@@ -80,7 +83,7 @@ export default function SubscriptionPage() {
   }
 
   async function handleDowngrade() {
-    if (!user?.uid || !branchId || !canManageBilling) return;
+    if (!user?.uid || !branchId || !canManageBilling || status !== 'ready') return;
     setError('');
     setWorking(true);
     try {
@@ -93,6 +96,8 @@ export default function SubscriptionPage() {
       setConfirmDowngrade(false);
     }
   }
+
+  if (status !== 'ready') return <div className="sub"><h1>Subscription</h1><SubscriptionStatus /></div>;
 
   return (
     <div className="sub">
@@ -109,7 +114,7 @@ export default function SubscriptionPage() {
         </div>
       </header>
 
-      {subscriptionActive && workspace?.subscriptionStatus === 'trialing' && (
+      {subscriptionActive && billing?.subscriptionStatus === 'trialing' && (
         <div className={`sub__trial ${trialEnding ? 'is-ending' : ''}`} role="status">
           <Sparkles size={18} />
           <div>

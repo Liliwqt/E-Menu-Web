@@ -1,3 +1,4 @@
+import { useSubscription } from './SubscriptionContext';
 /**
  * Live Analyst Provider — Session-Level Background AI Service
  *
@@ -150,14 +151,10 @@ export function LiveAnalystProvider({ children }) {
   const branchDataRef = useRef(null);
   const [branchDataVersion, setBranchDataVersion] = useReducer((x) => x + 1, 0);
 
-  const activeBranch = useMemo(() => {
-    // The branch comes from the workspace record. The previous version also fell
-    // back to getUserBranch(user.email), passing an email where a workspace is
-    // expected, so that branch was unreachable — and a hardcoded 'branch1' for the
-    // administrator address, which no longer exists.
-    if (!workspace?.onboardingComplete) return null;
-    return workspace.branchId || null;
-  }, [workspace]);
+  const { branchId: activeBranch } = useSubscription();
+  const requestScope = useMemo(() => ({}), [user?.uid, activeBranch, aiEnabled]);
+  const requestScopeRef = useRef(requestScope);
+  requestScopeRef.current = requestScope;
 
   const branchLabel = useMemo(
     () => branchNameFor({ workspace, branchId: activeBranch }),
@@ -218,7 +215,7 @@ export function LiveAnalystProvider({ children }) {
   const handleGenerate = useCallback(
     async (mode = 'realtime', forceRefresh = false, reportContext = null, revealNotification = true) => {
       const bd = branchDataRef.current;
-      if (!aiEnabled || generatingRef.current || !activeBranch || !bd?.aiAnalyticsData) return null;
+      if (!aiEnabled || generatingRef.current || !activeBranch || bd?.branchId !== activeBranch || !bd?.aiAnalyticsData) return null;
       generatingRef.current = true;
       dispatch({ type: A.SET_GENERATING, payload: true });
       dispatch({ type: A.SET_ERROR, payload: null });
@@ -239,6 +236,7 @@ export function LiveAnalystProvider({ children }) {
           dispatch({ type: A.SET_PREPARING, payload: null });
         }
 
+        if (requestScopeRef.current !== requestScope || !mountedRef.current) return null;
         dispatch({ type: A.ADD_FEED_ITEM, payload: result });
 
         if (revealNotification && mountedRef.current) {
@@ -246,6 +244,7 @@ export function LiveAnalystProvider({ children }) {
         }
         return result;
       } catch (err) {
+        if (requestScopeRef.current !== requestScope || !mountedRef.current) return null;
         console.error('[LiveAnalyst] Generation failed:', err);
         if (mode === 'briefing') {
           const remaining = preparingVisibleUntilRef.current - Date.now();
@@ -264,7 +263,7 @@ export function LiveAnalystProvider({ children }) {
         }
       }
     },
-    [activeBranch, aiEnabled, showNotification]
+    [activeBranch, aiEnabled, showNotification, requestScope]
   );
 
   // AI Shift Handoff (auto on login)
@@ -295,11 +294,11 @@ export function LiveAnalystProvider({ children }) {
       }
     } finally {
       handoffInFlightRef.current = false;
-      if (mountedRef.current) {
+      if (mountedRef.current && requestScopeRef.current === requestScope) {
         dispatch({ type: A.SET_HANDOFF_COMPLETE, payload: true });
       }
     }
-  }, [aiEnabled, activeBranch, branchLabel, handleGenerate, nickname]);
+  }, [aiEnabled, activeBranch, branchLabel, handleGenerate, nickname, requestScope]);
 
   const generateLiveReport = useCallback(async () => {
     const bd = branchDataRef.current;

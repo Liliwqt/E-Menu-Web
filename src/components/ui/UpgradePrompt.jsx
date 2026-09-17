@@ -1,12 +1,13 @@
 import { useNavigate } from 'react-router-dom';
 import { Sparkles, Lock, ArrowRight, ShieldQuestion } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
+import { useSubscription } from '../../context/SubscriptionContext';
+import SubscriptionStatus from './SubscriptionStatus';
 import { AI_ACCESS_DENIED } from '../../lib/aiAccess';
 import '../../styles/upgrade-prompt.css';
 
 export default function UpgradePrompt({ feature, title, description, branchId, compact = false, deniedBy = null }) {
   const navigate = useNavigate();
-  const { workspace } = useAuth();
+  const { billing: workspace, status } = useSubscription();
   const trialEnding =
     workspace?.plan === 'subscription' &&
     workspace?.subscriptionStatus === 'trialing' &&
@@ -17,6 +18,8 @@ export default function UpgradePrompt({ feature, title, description, branchId, c
   // saying nothing: subscribing would not help, and the route is closed to them
   // anyway, so the button would do nothing at all when pressed.
   const roleDenied = deniedBy === AI_ACCESS_DENIED.ROLE;
+
+  if (status !== 'ready') return <SubscriptionStatus />;
 
   return (
     <div className={`up ${compact ? 'up--compact' : ''}`} role="region" aria-label={title}>
