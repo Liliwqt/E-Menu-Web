@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { KeyRound, LogOut, Palette, UserRound } from 'lucide-react';
+import { KeyRound, LogOut, Palette, UserRound, ShieldCheck } from 'lucide-react';
 import Modal from '../ui/Modal';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import { roleLabel } from '../../lib/permissions';
 
 export default function SettingsModal({ open, onClose }) {
-  const { user, nickname, updateNickname, changePassword, logout } = useAuth();
+  const { user, nickname, role, updateNickname, changePassword, logout } = useAuth();
   const { theme, setThemeMode } = useTheme();
   const [nicknameInput, setNicknameInput] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -66,6 +67,18 @@ export default function SettingsModal({ open, onClose }) {
 
   return (
     <Modal open={open} onClose={onClose} title="Account settings" subtitle={user?.email}>
+      {/* The account button is an icon in the header, so the name and role it
+          used to show in the sidebar are surfaced here instead. */}
+      <div style={sectionStyle}>
+        <div style={headStyle}><ShieldCheck size={15} /> Signed in as</div>
+        <div style={{ display: 'grid', gap: 2 }}>
+          <strong style={{ fontSize: 'var(--text-sm)' }}>
+            {nickname || user?.email?.split('@')[0] || 'Member'}
+          </strong>
+          <span style={{ color: 'var(--text-3)', fontSize: 'var(--text-xs)' }}>{roleLabel(role)}</span>
+        </div>
+      </div>
+
       <div style={sectionStyle}>
         <div style={headStyle}><UserRound size={15} /> Display name</div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -112,11 +125,10 @@ export default function SettingsModal({ open, onClose }) {
       </div>
 
       {/*
-        Sign out lives here as well as in the sidebar footer, because the sidebar
-        does not exist on a narrow window: the compact layout replaces it with a
-        header and a bottom bar, and neither carried a way out of the account.
-        This modal is opened by the account button in both layouts, so one copy
-        here covers every screen size.
+        The only sign-out control, reached from the account button in the header
+        on both layouts. It used to be duplicated in the sidebar footer, but the
+        account control now lives in the header corner, and the header exists at
+        every screen size — so one copy covers them all.
       */}
       <div style={{ display: 'grid', gap: 10, marginTop: 'var(--sp-5)', paddingTop: 'var(--sp-5)', borderTop: '1px solid var(--border)' }}>
         <button

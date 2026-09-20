@@ -233,21 +233,8 @@
   background: var(--primary);
 }
 
-/* Pinned: the nav absorbs the height pressure, the footer never shrinks. */
-.shell__footer { display: grid; gap: var(--sp-3); flex-shrink: 0; }
-
-.shell__user {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px;
-  border-radius: var(--r-md);
-  border: 1px solid var(--border);
-  background: var(--surface);
-  width: 100%;
-  transition: border-color var(--dur-fast) ease, background var(--dur-fast) ease;
-}
-.shell__user:hover { border-color: var(--border-strong); background: var(--surface-2); }
+/* The sidebar footer, and the .shell__user* account row it held, are gone: the
+   account control now sits in the header corner at every screen size. */
 
 .shell__avatar {
   width: 34px;
@@ -261,17 +248,6 @@
   font-weight: 700;
   flex-shrink: 0;
 }
-
-.shell__userName {
-  font-size: var(--text-sm);
-  font-weight: 650;
-  color: var(--text-1);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  text-align: left;
-}
-.shell__userRole { font-size: var(--text-xs); color: var(--text-3); text-align: left; }
 
 /* Icon-only account button in the mobile header.
    44px on both axes: `min-height:44px` in workflows.css applies to every button
