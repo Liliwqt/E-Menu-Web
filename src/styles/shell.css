@@ -236,21 +236,18 @@
 /* Pinned: the nav absorbs the height pressure, the footer never shrinks. */
 .shell__footer { display: grid; gap: var(--sp-3); flex-shrink: 0; }
 
-/* Icon-only account button: opens Account settings. */
 .shell__user {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
   border-radius: var(--r-md);
   border: 1px solid var(--border);
   background: var(--surface);
-  color: var(--text-2);
-  justify-self: start;
-  transition: border-color var(--dur-fast) ease, background var(--dur-fast) ease, color var(--dur-fast) ease;
+  width: 100%;
+  transition: border-color var(--dur-fast) ease, background var(--dur-fast) ease;
 }
-.shell__user:hover { border-color: var(--border-strong); background: var(--surface-2); color: var(--text-1); }
+.shell__user:hover { border-color: var(--border-strong); background: var(--surface-2); }
 
 .shell__avatar {
   width: 34px;
@@ -264,6 +261,17 @@
   font-weight: 700;
   flex-shrink: 0;
 }
+
+.shell__userName {
+  font-size: var(--text-sm);
+  font-weight: 650;
+  color: var(--text-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+.shell__userRole { font-size: var(--text-xs); color: var(--text-3); text-align: left; }
 
 /* Main area */
 .shell__main {

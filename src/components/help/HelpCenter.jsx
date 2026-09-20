@@ -154,7 +154,7 @@ const SECTIONS = [
     content: [
       {
         heading: 'Account Settings',
-        text: 'Click your profile icon at the bottom left (or top right on phones) to change your name or password.',
+        text: 'Click your profile initials at the bottom left (or your profile icon at the top right on phones) to change your name or password.',
         visualIcon: Settings2,
       },
       {

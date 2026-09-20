@@ -3,7 +3,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, TrendingUp, Boxes, ReceiptText, UtensilsCrossed,
-  FileBarChart, History, Sun, Moon, LogOut, Sparkles, Coffee, HelpCircle,
+  FileBarChart, History, Sun, Moon, LogOut, Sparkles, Settings2, Coffee, HelpCircle,
   Monitor, CreditCard, MoreHorizontal, Users, User,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -13,7 +13,7 @@ import { useLiveAnalyst } from '../../context/LiveAnalystProvider';
 import { branchLabel } from '../../lib/branchLabel';
 import { useAiAccess } from '../../hooks/useAiAccess';
 import { isEmbeddedInApp, enterMenuMode, getDeviceUid } from '../../lib/deviceBridge';
-import { CAP } from '../../lib/permissions';
+import { CAP, roleLabel } from '../../lib/permissions';
 import SettingsModal from './SettingsModal';
 import DeviceRegisterDialog from './DeviceRegisterDialog';
 import AINotificationPanel from '../ai/AINotificationPanel';
@@ -64,7 +64,7 @@ function activeKeyFor(pathname) {
 export default function AppShell({ children, title }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { workspace, logout, can } = useAuth();
+  const { user, nickname, workspace, logout, role, can } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { branchId, aiAnalyticsData, hasOrders } = useBranchData();
   const { setBranchData } = useLiveAnalyst();
@@ -98,6 +98,8 @@ export default function AppShell({ children, title }) {
 
   const activeKey = activeKeyFor(location.pathname);
   const branchName = branchLabel({ workspace, branchId });
+  const displayName = nickname || user?.email?.split('@')[0] || 'Manager';
+  const initials = displayName.slice(0, 2).toUpperCase();
   const embeddedInApp = isEmbeddedInApp();
 
   // Navigation is filtered by capability, so a staff account never sees a door
@@ -204,13 +206,13 @@ export default function AppShell({ children, title }) {
             {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
             {theme === 'light' ? 'Dark mode' : 'Light mode'}
           </button>
-          <button
-            className="shell__user"
-            onClick={() => setSettingsOpen(true)}
-            aria-label="Account settings"
-            title="Account settings"
-          >
-            <User size={18} />
+          <button className="shell__user" onClick={() => setSettingsOpen(true)} title="Account settings">
+            <div className="shell__avatar">{initials}</div>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div className="shell__userName">{displayName}</div>
+              <div className="shell__userRole">{roleLabel(role)}</div>
+            </div>
+            <Settings2 size={16} style={{ color: 'var(--text-3)', flexShrink: 0 }} />
           </button>
           <button className="btn btn--ghost btn--sm" onClick={() => { logout(); navigate('/'); }} style={{ justifyContent: 'flex-start', color: 'var(--text-3)' }}>
             <LogOut size={15} />
