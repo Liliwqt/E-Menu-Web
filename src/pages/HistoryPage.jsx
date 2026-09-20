@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import { History, Search, EyeOff, Eye, Info } from 'lucide-react';
-import AppShell from '../components/layout/AppShell';
 import { useBranchData } from '../context/BranchDataContext';
 import { useAuth } from '../context/AuthContext';
 import { excludeOrderFromAnalytics, includeOrderInAnalytics } from '../lib/analyticsApi';
@@ -93,7 +92,7 @@ export default function HistoryPage() {
   }
 
   return (
-    <AppShell title="Order History">
+    <>
       <section className="card card--pad rise" style={{ marginBottom: 'var(--sp-4)' }}>
         <div className="flex gap-2" style={{ alignItems: 'flex-start' }}>
           <Info size={16} style={{ color: 'var(--primary)', flexShrink: 0, marginTop: 3 }} />
@@ -204,6 +203,6 @@ export default function HistoryPage() {
           </table>
         </div>
       )}
-    </AppShell>
+    </>
   );
 }

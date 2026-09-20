@@ -10,6 +10,8 @@ import { BranchDataProvider, useBranchData } from './context/BranchDataContext';
 import LoginPage from './pages/LoginPage';
 import WorkspaceSetupPage from './pages/WorkspaceSetupPage';
 import AccessErrorScreen from './components/ui/AccessErrorScreen';
+import AppShell from './components/layout/AppShell';
+import ContentSkeleton from './components/ui/ContentSkeleton';
 
 /**
  * A page that recovers when its chunk belongs to a previous deploy.
@@ -161,19 +163,50 @@ function CapabilityRoute({ capability, children }) {
   const { branchId } = useBranchData();
 
   if (!capability) return children;
-  if (!workspaceLoaded) return <FullScreenLoader />;
+  // Only the content area is pending, so a content-sized placeholder is right.
+  if (!workspaceLoaded) return <ContentSkeleton />;
   if (can(capability)) return children;
   // Dashboard carries no capability, so it is always a safe landing place.
   return <Navigate to={branchId ? `/home/${branchId}` : '/'} replace />;
 }
 
+/**
+ * Pages that render inside the app shell.
+ *
+ * AppShell is mounted HERE, above the lazy page, rather than by the page itself.
+ * It used to live inside each page's chunk, so the first visit to a panel had no
+ * shell to draw and replaced the whole screen with a spinner. Keeping it at the
+ * route level means the sidebar and header stay put and only the content area
+ * suspends — see the Suspense inside AppShell.
+ */
+function shellRoute(Page, capability) {
+  return (
+    <ProtectedRoute>
+      <BranchScope>
+        <AppShell>
+          <CapabilityRoute capability={capability}>
+            <Page />
+          </CapabilityRoute>
+        </AppShell>
+      </BranchScope>
+    </ProtectedRoute>
+  );
+}
+
+/**
+ * Pages that render standalone, without the shell: they carry their own back
+ * button and fill the viewport. Their whole screen is the changing part, so the
+ * Suspense boundary is here and the fallback is a content skeleton.
+ */
 function branchRoute(Page, capability) {
   return (
     <ProtectedRoute>
       <BranchScope>
-        <CapabilityRoute capability={capability}>
-          <Page />
-        </CapabilityRoute>
+        <Suspense fallback={<ContentSkeleton />}>
+          <CapabilityRoute capability={capability}>
+            <Page />
+          </CapabilityRoute>
+        </Suspense>
       </BranchScope>
     </ProtectedRoute>
   );
@@ -181,27 +214,25 @@ function branchRoute(Page, capability) {
 
 export default function App() {
   return (
-    <Suspense fallback={<FullScreenLoader />}>
-      <Routes>
+    <Routes>
         <Route path="/" element={<LoginPage />} />
         <Route path="/setup" element={<SetupRoute />} />
-        <Route path="/home/:branchId" element={branchRoute(DashboardPage)} />
-        <Route path="/analytics/:branchId" element={branchRoute(AnalyticsPage, CAP.VIEW_ANALYTICS)} />
-        <Route path="/inventory/:branchId" element={branchRoute(InventoryPage)} />
-        <Route path="/orders/:branchId" element={branchRoute(OrdersPage)} />
-        <Route path="/menu/:branchId" element={branchRoute(MenuPage, CAP.TOGGLE_AVAILABILITY)} />
-        <Route path="/reports/:branchId" element={branchRoute(ReportsPage, CAP.EXPORT_REPORTS)} />
+        <Route path="/home/:branchId" element={shellRoute(DashboardPage)} />
+        <Route path="/analytics/:branchId" element={shellRoute(AnalyticsPage, CAP.VIEW_ANALYTICS)} />
+        <Route path="/inventory/:branchId" element={shellRoute(InventoryPage)} />
+        <Route path="/orders/:branchId" element={shellRoute(OrdersPage)} />
+        <Route path="/menu/:branchId" element={shellRoute(MenuPage, CAP.TOGGLE_AVAILABILITY)} />
+        <Route path="/reports/:branchId" element={shellRoute(ReportsPage, CAP.EXPORT_REPORTS)} />
         {/* Matches the nav entry: the ledger is where corrections happen, and the
             nav already withholds it from staff. Opening it read-only to staff is a
             product call, not a technical one — HistoryPage renders correctly either
             way, so only this capability and the nav entry change together. */}
-        <Route path="/analytics-history/:branchId" element={branchRoute(HistoryPage, CAP.CORRECT_ANALYTICS)} />
+        <Route path="/analytics-history/:branchId" element={shellRoute(HistoryPage, CAP.CORRECT_ANALYTICS)} />
         <Route path="/devices/:branchId" element={branchRoute(DevicesPage, CAP.MANAGE_DEVICES)} />
         <Route path="/team/:branchId" element={branchRoute(TeamPage, CAP.MANAGE_STAFF)} />
         {/* Members can read the branch plan; SubscriptionPage gates changes to the owner. */}
         <Route path="/subscription/:branchId" element={branchRoute(SubscriptionPage)} />
         <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </Suspense>
+    </Routes>
   );
 }

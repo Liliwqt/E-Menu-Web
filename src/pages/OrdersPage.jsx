@@ -2,7 +2,6 @@ import { useMemo, useRef, useState } from 'react';
 import { ReceiptText, Trash2, Search, RotateCcw, Clock3 } from 'lucide-react';
 import ReadState from '../components/ui/ReadState';
 import { orderInDateRange } from '../lib/orderFilters';
-import AppShell from '../components/layout/AppShell';
 import Modal from '../components/ui/Modal';
 import { useBranchData } from '../context/BranchDataContext';
 import { useAuth } from '../context/AuthContext';
@@ -158,7 +157,7 @@ export default function OrdersPage() {
   }
 
   return (
-    <AppShell title="Orders">
+    <>
       {notice && <p role="status" className="notice">{notice}</p>}
       <div className="inv__toolbar rise">
         <div className="inv__search">
@@ -254,6 +253,6 @@ export default function OrdersPage() {
           </div>
         )}
       </Modal>
-    </AppShell>
+    </>
   );
 }

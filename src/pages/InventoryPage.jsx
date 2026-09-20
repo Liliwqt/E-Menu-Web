@@ -5,7 +5,6 @@ import {
 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import ReadState from '../components/ui/ReadState';
-import AppShell from '../components/layout/AppShell';
 import Modal from '../components/ui/Modal';
 import ScoreRing from '../components/ui/ScoreRing';
 import { useBranchData } from '../context/BranchDataContext';
@@ -290,17 +289,17 @@ export default function InventoryPage() {
   }, [items, search, statusFilter, categoryFilter, sortBy]);
 
   const clearFilters = () => { setSearch(''); setCategoryFilter('all'); setStatusFilter('all'); setSortBy('status'); };
-  if (inventoryResource?.status === 'error') return <AppShell title="Inventory"><ReadState resource={inventoryResource} label="inventory" /></AppShell>;
+  if (inventoryResource?.status === 'error') return <><ReadState resource={inventoryResource} label="inventory" /></>;
   if (!inventoryLoaded) {
     return (
-      <AppShell title="Inventory">
+      <>
         <div className="inv__summary" role="status" aria-label="Loading inventory">
           {[0, 1, 2, 3].map((i) => <div key={i} className="skeleton" style={{ height: 84, borderRadius: 'var(--r-lg)' }} />)}
         </div>
         <div className="inv__grid">
           {[0, 1, 2, 3, 4, 5].map((i) => <div key={i} className="skeleton" style={{ height: 170, borderRadius: 'var(--r-lg)' }} />)}
         </div>
-      </AppShell>
+      </>
     );
   }
 
@@ -311,7 +310,7 @@ export default function InventoryPage() {
   };
 
   return (
-    <AppShell title="Inventory">
+    <>
       {/* ── Health summary ── */}
       <div className="inv__summary">
         <div className="card inv__summaryCard rise-1">
@@ -462,6 +461,6 @@ export default function InventoryPage() {
           onClose={() => setSelected(null)}
         />
       )}
-    </AppShell>
+    </>
   );
 }

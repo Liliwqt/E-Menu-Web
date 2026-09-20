@@ -7,7 +7,6 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useBranchData } from '../context/BranchDataContext';
-import AppShell from '../components/layout/AppShell';
 import AnimatedNumber from '../components/ui/AnimatedNumber';
 import Sparkline from '../components/ui/Sparkline';
 import StatDelta from '../components/ui/StatDelta';
@@ -232,10 +231,10 @@ export default function DashboardPage() {
       <button className="btn btn--ghost" onClick={() => navigate(`/inventory/${branchId}?status=warning`)}>{getInventoryHealth(inventory).warning.length} low stock entries</button>
     </div>}
   </section>;
-  if (analyticsResource?.status === 'error' || logsResource?.status === 'error') return <AppShell title="Dashboard">{operations}<ReadState resource={analyticsResource} label="dashboard" /><ReadState resource={logsResource} label="orders" /></AppShell>;
+  if (analyticsResource?.status === 'error' || logsResource?.status === 'error') return <>{operations}<ReadState resource={analyticsResource} label="dashboard" /><ReadState resource={logsResource} label="orders" /></>;
   if (!analyticsLoaded) {
     return (
-      <AppShell title="Dashboard">
+      <>
         {operations}
         <p role="status">Loading dashboard…</p>
         <div className="dash__kpis">
@@ -245,7 +244,7 @@ export default function DashboardPage() {
           <div className="skeleton" style={{ height: 280, borderRadius: 'var(--r-lg)' }} />
           <div className="skeleton" style={{ height: 280, borderRadius: 'var(--r-lg)' }} />
         </div>
-      </AppShell>
+      </>
     );
   }
 
@@ -255,7 +254,7 @@ export default function DashboardPage() {
   const insightPriority = insight?.insight?.priority;
 
   return (
-    <AppShell title="Dashboard">
+    <>
       {operations}
       {/* ── Hero ── */}
       <div className="dash__hero rise">
@@ -654,6 +653,6 @@ export default function DashboardPage() {
           <ExecutivePresentation open={presentationOpen} onClose={() => setPresentationOpen(false)} />
         </Suspense>
       )}
-    </AppShell>
+    </>
   );
 }

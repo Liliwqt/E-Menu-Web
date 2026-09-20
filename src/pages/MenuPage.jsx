@@ -3,7 +3,6 @@ import {
   UtensilsCrossed, Plus, Pencil, Trash2, Star, ImagePlus, FolderPlus,
   ScrollText, EyeOff, Eye, ChevronDown, ChevronRight,
 } from 'lucide-react';
-import AppShell from '../components/layout/AppShell';
 import Modal from '../components/ui/Modal';
 import { useBranchData } from '../context/BranchDataContext';
 import { useAuth } from '../context/AuthContext';
@@ -369,7 +368,7 @@ export default function MenuPage() {
   );
 
   return (
-    <AppShell title="Menu">
+    <>
       <div className="flex-between rise" style={{ marginBottom: 'var(--sp-5)', flexWrap: 'wrap' }}>
         <p className="card-sub" style={{ margin: 0 }}>
           {categories.length} categories · {totalItems} items. Availability syncs automatically with inventory stock.
@@ -645,6 +644,6 @@ export default function MenuPage() {
           </div>
         )}
       </Modal>
-    </AppShell>
+    </>
   );
 }

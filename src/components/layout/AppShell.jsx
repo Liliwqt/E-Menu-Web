@@ -19,6 +19,7 @@ import DeviceRegisterDialog from './DeviceRegisterDialog';
 import AINotificationPanel from '../ai/AINotificationPanel';
 import HelpCenter from '../help/HelpCenter';
 import Modal from '../ui/Modal';
+import ContentSkeleton from '../ui/ContentSkeleton';
 import BranchSwitcher from './BranchSwitcher';
 
 const AIAnalystDrawer = lazy(() => import('../ai/AIAnalystDrawer'));
@@ -301,8 +302,12 @@ export default function AppShell({ children, title }) {
           </div>
         </header>
 
+        {/* The page's lazy chunk suspends here, so the shell above stays mounted
+            and only the content area is replaced while it downloads. */}
         <main className="shell__content page-enter" key={location.pathname}>
-          {children}
+          <Suspense fallback={<ContentSkeleton />}>
+            {children}
+          </Suspense>
         </main>
       </div>
 

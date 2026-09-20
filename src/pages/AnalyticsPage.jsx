@@ -4,7 +4,6 @@ import {
   Banknote, ReceiptText, Gauge, TrendingUp, Clock3, PieChart, Sigma,
   Sparkles, Presentation, FileText, History, Layers,
 } from 'lucide-react';
-import AppShell from '../components/layout/AppShell';
 import AnimatedNumber from '../components/ui/AnimatedNumber';
 import StatDelta from '../components/ui/StatDelta';
 import { AreaChart, BarChart, DonutChart, HourHeatStrip, RankedBars } from '../components/ui/charts';
@@ -170,17 +169,17 @@ export default function AnalyticsPage() {
 
   if (!analyticsLoaded) {
     return (
-      <AppShell title="Analytics">
+      <>
         <div className="ana__kpis">
           {[0, 1, 2].map((i) => <div key={i} className="skeleton" style={{ height: 128, borderRadius: 'var(--r-lg)' }} />)}
         </div>
         <div className="skeleton" style={{ height: 320, borderRadius: 'var(--r-lg)' }} />
-      </AppShell>
+      </>
     );
   }
 
   return (
-    <AppShell title="Analytics">
+    <>
       {/* ── Toolbar ── */}
       <div className="ana__toolbar rise">
         <div className="seg" role="tablist" aria-label="Analytics period">
@@ -439,6 +438,6 @@ export default function AnalyticsPage() {
           <ExecutivePresentation open={presentationOpen} onClose={() => setPresentationOpen(false)} />
         </Suspense>
       )}
-    </AppShell>
+    </>
   );
 }

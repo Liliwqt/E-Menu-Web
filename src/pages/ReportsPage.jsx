@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import { Printer, Sparkles, FileBarChart } from 'lucide-react';
-import AppShell from '../components/layout/AppShell';
 import { AreaChart, DonutChart, RankedBars } from '../components/ui/charts';
 import { useBranchData } from '../context/BranchDataContext';
 import { useAuth } from '../context/AuthContext';
@@ -80,7 +79,7 @@ export default function ReportsPage() {
   const deltaText = (d) => (d?.available && d.pct !== null ? `${d.pct > 0 ? '+' : ''}${d.pct.toFixed(1)}% vs previous period` : 'no comparison data');
 
   return (
-    <AppShell title="Reports">
+    <>
       <div className="flex-between report-toolbar rise" style={{ marginBottom: 'var(--sp-5)', flexWrap: 'wrap' }}>
         <div className="seg">
           {RANGES.map((r) => (
@@ -211,6 +210,6 @@ export default function ReportsPage() {
           </footer>
         </article>
       )}
-    </AppShell>
+    </>
   );
 }
