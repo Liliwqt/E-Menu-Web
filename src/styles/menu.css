@@ -19,7 +19,15 @@
   gap: var(--sp-4);
 }
 
-.menu-item { overflow: hidden; display: grid; align-content: start; }
+/* Flex column so the action row can be pinned to the card's bottom edge.
+   Grid items stretch to the tallest card in a row, and `margin-top: auto` on the
+   actions pushes them down, so every card's actions line up instead of floating
+   up when a card happens to have less content (fewer sizes, no saved message). */
+.menu-item {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
 
 .menu-item__img {
   width: 100%;
@@ -29,15 +37,24 @@
   display: grid;
   place-items: center;
   color: var(--text-3);
+  /* Preserve the image's own height; flex would otherwise shrink it. */
+  flex-shrink: 0;
 }
 
-.menu-item__body { padding: var(--sp-4); display: grid; gap: 8px; }
+.menu-item__body {
+  padding: var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 auto;
+}
 
 .menu-item__name { font-weight: 650; color: var(--text-1); display: flex; align-items: center; gap: 6px; }
 
 .menu-item__price { font-family: var(--font-mono); font-weight: 700; color: var(--primary); }
 
-.menu-item__actions { display: flex; gap: 6px; flex-wrap: wrap; }
+/* Pinned to the bottom of the card body. */
+.menu-item__actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: auto; }
 
 .menu-item__sizes { display: flex; gap: 5px; flex-wrap: wrap; }
 .menu-item__sizes .pill { font-size: 0.66rem; padding: 3px 7px; }
