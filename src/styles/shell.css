@@ -273,6 +273,18 @@
 }
 .shell__userRole { font-size: var(--text-xs); color: var(--text-3); text-align: left; }
 
+/* Icon-only account button in the mobile header.
+   44px on both axes: `min-height:44px` in workflows.css applies to every button
+   inside .shell, and min-height beats height, so an explicit height alone would
+   leave a tall rectangle. Matching the width keeps it a perfect square and at the
+   minimum touch-target size. */
+.shell__avatar--button {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+}
+
 /* Main area */
 .shell__main {
   flex: 1;

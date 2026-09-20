@@ -291,13 +291,12 @@ export default function AppShell({ children, title }) {
               </button>
             )}
             <button
-              className="shell__avatar"
-              style={{ border: 'none', width: 32, height: 32 }}
+              className="shell__avatar shell__avatar--button"
               onClick={() => setSettingsOpen(true)}
               aria-label="Account settings"
               title="Account settings"
             >
-              <User size={17} />
+              <User size={18} />
             </button>
           </div>
         </header>
