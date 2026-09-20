@@ -15,7 +15,7 @@ const SECTIONS = [
       },
       {
         heading: 'How to move around',
-        text: '• On computers: Use the menu on the left, grouped into Overview, Insights, and Settings.\n• On phones: Use the four buttons at the bottom for everyday tools — Dashboard, Orders, Menu, Inventory.\n• Tap More on the bottom bar to reach Analytics, Reports, Order History, Kiosks, and Subscription.',
+        text: '• On computers: Use the menu on the left, grouped into Overview, Insights, and Settings.\n• On phones: Use the four buttons at the bottom for everyday tools — Dashboard, Orders, Menu, Inventory.\n• Tap More on the bottom bar to reach Analytics, Reports, Order History, Devices, and Subscription.',
       }
     ],
   },

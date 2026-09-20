@@ -2,7 +2,7 @@
  * Which orders count toward the analytics roll-up.
  *
  * Exclusions are an accounting adjustment, so they are kept beside the ledger
- * rather than written onto it: the order stays exactly as the kiosk recorded it,
+ * rather than written onto it: the order stays exactly as the device recorded it,
  * and the adjustment carries who made it and why. See the rules for why the flag
  * lives in its own node.
  *

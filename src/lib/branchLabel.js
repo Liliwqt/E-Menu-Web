@@ -2,7 +2,7 @@
  * What to call a branch on screen.
  *
  * Branch ids are machine keys — `branch-<company>-<branch>-<random>` — and three
- * things depend on them being exactly that: the routes, the kiosk enrolment
+ * things depend on them being exactly that: the routes, the device enrolment
  * records, and the database rules that pattern-match `^branch-[a-z0-9-]+$`. They
  * are not free to change, and they are not meant to be read.
  *

@@ -435,7 +435,7 @@
   to { transform: translateY(0); }
 }
 
-/* ── Kiosk Register Dialog ─────────────────────────────────────────── */
+/* ── Device Register Dialog ─────────────────────────────────────────── */
 .kr__overlay {
   position: fixed;
   inset: 0;

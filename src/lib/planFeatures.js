@@ -18,7 +18,7 @@ export const FEATURE = {
   SMART_RECOMMENDATIONS: 'smart_recommendations',
   DEEP_ANALYTICS: 'deep_analytics',
   TEAM_MEMBERS: 'team_members',
-  MULTI_KIOSK: 'multi_kiosk',
+  MULTI_DEVICES: 'multi_devices',
   API_ACCESS: 'api_access',
   UNLIMITED_HISTORY: 'unlimited_history',
 };
@@ -35,7 +35,7 @@ const AI_FEATURES = new Set([
 
 const SUBSCRIPTION_ONLY_FEATURES = new Set([
   FEATURE.TEAM_MEMBERS,
-  FEATURE.MULTI_KIOSK,
+  FEATURE.MULTI_DEVICES,
   FEATURE.API_ACCESS,
   FEATURE.UNLIMITED_HISTORY,
 ]);
@@ -114,8 +114,8 @@ export const FEATURE_METADATA = {
     label: 'Team Members',
     description: 'Add managers and staff to your branch',
   },
-  [FEATURE.MULTI_KIOSK]: {
-    label: 'Multiple Kiosks',
+  [FEATURE.MULTI_DEVICES]: {
+    label: 'Multiple Devices',
     description: 'Run more than one ordering device',
   },
   [FEATURE.API_ACCESS]: {

@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
  *   - A page inside a sandboxed frame is refused outright — Chrome throws
  *     "prompt() is not supported", so the button raises an uncaught error.
  *   - Android's WebView returns null unless the host implements
- *     WebChromeClient.onJsPrompt. The kiosk sets a plain WebChromeClient(), so
+ *     WebChromeClient.onJsPrompt. The device sets a plain WebChromeClient(), so
  *     prompt() returns null and the rename silently does nothing at all.
  *
  * Both failures are quiet from the outside: a button that appears to do nothing,

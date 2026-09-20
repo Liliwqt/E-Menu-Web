@@ -218,7 +218,7 @@ export default function BranchSwitcher({ branchId, compact = false }) {
             <h2 id="delete-branch-title">Delete <span className="branch-switcher__deleteName">{deleteBranch.name}</span>?</h2>
             <p className="branch-switcher__dangerNote">
               This <strong>permanently deletes</strong> this branch and all of its data
-              (menu, orders, inventory, settings, and kiosk enrollment). This cannot be undone.
+              (menu, orders, inventory, settings, and device enrollment). This cannot be undone.
             </p>
             <form onSubmit={confirmDelete}>
               <label>

@@ -489,9 +489,9 @@ export async function rebuildAnalyticsFromLogs(branchId, logsData = null) {
 /**
  * Keeps an order out of the analytics roll-up without touching the order.
  *
- * This used to write a flag onto the order and refuse outright for kiosk orders,
- * which meant it could never run: every order in production comes from a kiosk.
- * The flag now lives in its own node, so the order stays exactly as the kiosk
+ * This used to write a flag onto the order and refuse outright for device orders,
+ * which meant it could never run: every order in production comes from a device.
+ * The flag now lives in its own node, so the order stays exactly as the device
  * wrote it and the adjustment is recorded separately with who made it and why.
  *
  * @param {string} orderId the order's uuid, not its short order number

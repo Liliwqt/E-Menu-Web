@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, X, Chrome } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { getUserBranch } from '../config/authConfig';
-import { isEmbeddedInKiosk } from '../lib/kioskBridge';
+import { isEmbeddedInApp } from '../lib/deviceBridge';
 import '../styles/login.css';
 
 const FOOTER_CONTENT = {
@@ -53,9 +53,9 @@ export default function LoginPage() {
   const [staySignedIn, setStaySignedIn] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
-  // When embedded in the Android kiosk WebView, Google OAuth popups cannot open,
+  // When embedded in the Android device WebView, Google OAuth popups cannot open,
   // so default to the email/password form instead of the Google button.
-  const embedded = isEmbeddedInKiosk();
+  const embedded = isEmbeddedInApp();
   const [mode, setMode] = useState(embedded ? 'login' : 'google');
   const [resetSuccess, setResetSuccess] = useState('');
   const [resetCooldown, setResetCooldown] = useState(0);
@@ -137,7 +137,7 @@ export default function LoginPage() {
           <div className="lg__form">
             <p className="lg__googleLead">
               Sign in with your Google account to manage your restaurant operations. We use Google to
-              securely identify you and sync your access across the web dashboard and Android kiosk app.
+              securely identify you and sync your access across the web dashboard and Android device app.
             </p>
             <button type="button" className="lg__google lg__google--primary" onClick={handleGoogle} disabled={loading}>
               <Chrome size={18} />

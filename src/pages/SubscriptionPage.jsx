@@ -26,7 +26,7 @@ const PLANS = [
     description: 'Run the daily restaurant operation without AI.',
     features: [
       'Menu and inventory management',
-      'Live kiosk orders',
+      'Live device orders',
       'Basic sales dashboard',
       'Order history',
     ],
@@ -44,7 +44,7 @@ const PLANS = [
       'AI Chat Assistant with memory',
       'Smart Recommendations',
       'Deep Analytics with forecasting',
-      'Multiple kiosk management',
+      'Multiple device management',
     ],
   },
 ];
@@ -109,7 +109,7 @@ export default function SubscriptionPage() {
           <h1 className="sub__title">Subscription</h1>
           <p className="sub__subtitle">
             The Free plan covers your daily operations. The Subscription plan unlocks AI analyst,
-            proactive insights, and multi-kiosk management.
+            proactive insights, and multi-device management.
           </p>
         </div>
       </header>
@@ -213,7 +213,7 @@ export default function SubscriptionPage() {
                     <strong>{meta.label}</strong>
                     <span>{meta.description}</span>
                   </td>
-                  <td>{featureKey === FEATURE.MULTI_KIOSK || featureKey === FEATURE.TEAM_MEMBERS || AI_FEATURES.has(featureKey) ? '—' : <Check size={16} />}</td>
+                  <td>{featureKey === FEATURE.MULTI_DEVICES || featureKey === FEATURE.TEAM_MEMBERS || AI_FEATURES.has(featureKey) ? '—' : <Check size={16} />}</td>
                   <td><Check size={16} /></td>
                 </tr>
               );
@@ -225,7 +225,7 @@ export default function SubscriptionPage() {
       <ConfirmDialog
         open={confirmDowngrade}
         title="Switch to the Free plan?"
-        message={'The AI analyst, proactive insights and multi-kiosk management stop working '
+        message={'The AI analyst, proactive insights and multi-device management stop working '
           + 'immediately. Your menu, orders and stock are not affected, and you can start '
           + 'the trial again from this screen.'}
         confirmLabel="Switch to Free"

@@ -264,8 +264,8 @@
   margin-top: -8px;
 }
 
-/* Kiosk toggle — shown only when this web app is embedded in the Android kiosk WebView */
-.lg__kioskToggle {
+/* Device toggle — shown only when this web app is embedded in the Android device WebView */
+.lg__deviceToggle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -283,7 +283,7 @@
   cursor: pointer;
   transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
 }
-.lg__kioskToggle:hover {
+.lg__deviceToggle:hover {
   border-color: #8a764d;
   background: #2a2c2e;
   color: #d4b584;

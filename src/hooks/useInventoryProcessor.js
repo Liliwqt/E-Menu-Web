@@ -12,9 +12,9 @@ export function useInventoryProcessor(branchId, enabled = true) {
   useEffect(() => {
     if (!branchId || !enabled) return;
 
-    // Android kiosk orders create their log entry and decrement tracked stock in the same
+    // Android device orders create their log entry and decrement tracked stock in the same
     // Firebase multi-location update. The dashboard is intentionally read/sync-only here:
-    // consuming logs in the browser would double-decrement kiosk inventory and make stock
+    // consuming logs in the browser would double-decrement device inventory and make stock
     // depend on an open management session.
     syncInventoryWithMenu(branchId, 'inventory-processor', { syncAvailability: false }).catch(error => {
       console.error('Failed to sync inventory records:', error);

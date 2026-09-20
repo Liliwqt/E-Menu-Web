@@ -510,24 +510,27 @@ export async function deleteBranchToWorkspace(uid, branchId) {
   return { ...updatedWorkspace, updatedAt: Date.now() };
 }
 
-export async function registerKiosk(uid, branchId, kioskName, kioskUid) {
-  if (!uid || !branchId || !kioskUid) {
-    throw new Error('uid, branchId, and kioskUid are required to register a kiosk.');
+export async function registerDevice(uid, branchId, deviceName, deviceUid) {
+  if (!uid || !branchId || !deviceUid) {
+    throw new Error('uid, branchId, and deviceUid are required to register a device.');
   }
-  const name = cleanText(kioskName, 60) || 'Kiosk';
+  const name = cleanText(deviceName, 60) || 'Device';
   const now = serverTimestamp();
 
   const workspace = await loadWorkspace(uid);
-  await update(ref(database, `${branchPath(workspace?.companyId, branchId)}/kiosks/${kioskUid}`), {
-    kioskUid,
+  // NOTE: `kioskUid` below is a persisted database FIELD name and `kiosks`/
+  // `kioskEnrollments` are persisted paths. They must keep that spelling even
+  // though the JavaScript variable is now called `deviceUid`.
+  await update(ref(database, `${branchPath(workspace?.companyId, branchId)}/kiosks/${deviceUid}`), {
+    kioskUid: deviceUid,
     name,
     registeredAt: now,
     lastActiveAt: now,
     isActive: true,
   });
 
-  await update(ref(database, `${workspace.companyId}/users/${uid}/kiosks/${kioskUid}`), {
-    kioskUid,
+  await update(ref(database, `${workspace.companyId}/users/${uid}/kiosks/${deviceUid}`), {
+    kioskUid: deviceUid,
     name,
     registeredAt: now,
     lastActiveAt: now,
@@ -535,8 +538,8 @@ export async function registerKiosk(uid, branchId, kioskName, kioskUid) {
   });
   // Full enrollment record lives under the company (cleaner DB); the root index is
   // a tiny pointer that lets an unprovisioned device discover its company/branch.
-  await update(ref(database, `${workspace.companyId}/kioskEnrollments/${kioskUid}`), {
-    kioskUid,
+  await update(ref(database, `${workspace.companyId}/kioskEnrollments/${deviceUid}`), {
+    kioskUid: deviceUid,
     companyId: workspace.companyId,
     branchId,
     name,
@@ -545,7 +548,7 @@ export async function registerKiosk(uid, branchId, kioskName, kioskUid) {
     isActive: true,
     updatedAt: now,
   });
-  await update(ref(database, `kioskEnrollments/${kioskUid}`), {
+  await update(ref(database, `kioskEnrollments/${deviceUid}`), {
     companyId: workspace.companyId,
     branchId,
     isActive: true,
@@ -554,59 +557,59 @@ export async function registerKiosk(uid, branchId, kioskName, kioskUid) {
 }
 
 /**
- * Turns a registered kiosk on or off across every record the enrolment uses.
+ * Turns a registered device on or off across every record the enrolment uses.
  *
- * A kiosk is not one record but four: the branch's device list (what the Kiosks
+ * A device is not one record but four: the branch's device list (what the Devices
  * page draws), the registering member's own copy, the company's enrolment record,
  * and the tiny root pointer a tablet reads before it knows its company. The device
  * consults only the last one — AuthManager.loadEnrollment() asks
  * `kioskEnrollments/{uid}` for `isActive` and configures a branch only when it is
- * true — while the order rules consult the branch record, since a kiosk may write
- * an order only while `branches/{branchId}/kiosks/{uid}/isActive` is true.
+ * true — while the order rules consult the branch record, since a device may write
+ * an order only while `{branch}/kiosks/{uid}/isActive` is true.
  *
  * Deregistering wrote all four off. Enabling wrote two of them back, so the root
- * pointer stayed false: the page showed the kiosk Active while the tablet could no
+ * pointer stayed false: the page showed the device Active while the tablet could no
  * longer find its branch, and nothing short of pasting its UID into the register
  * form again would fix it. Both directions now go through this one switch, which is
  * what makes "Deregister" something the page can also undo.
  *
  * No rule changes are needed for the extra two writes: they are allowed for exactly
  * the roles that may already write the branch record (the branch's owner or manager,
- * or the company owner), which is the same set `registerKiosk` writes them with.
+ * or the company owner), which is the same set `registerDevice` writes them with.
  */
-export async function setKioskActive(uid, branchId, kioskUid, isActive) {
-  if (!uid || !branchId || !kioskUid) return;
+export async function setDeviceActive(uid, branchId, deviceUid, isActive) {
+  if (!uid || !branchId || !deviceUid) return;
   const workspace = await loadWorkspace(uid);
   const active = Boolean(isActive);
   const now = serverTimestamp();
 
   // The branch record first: it is the one the order rules read, so the lockout
   // (or the restoration) starts at the first write rather than the last.
-  await update(ref(database, `${branchPath(workspace?.companyId, branchId)}/kiosks/${kioskUid}`), {
+  await update(ref(database, `${branchPath(workspace?.companyId, branchId)}/kiosks/${deviceUid}`), {
     isActive: active,
     lastActiveAt: now,
   });
-  await update(ref(database, `${workspace.companyId}/users/${uid}/kiosks/${kioskUid}`), {
+  await update(ref(database, `${workspace.companyId}/users/${uid}/kiosks/${deviceUid}`), {
     isActive: active,
     lastActiveAt: now,
   });
   // Full enrolment record, informational for the portal: nothing reads its isActive.
-  await update(ref(database, `${workspace.companyId}/kioskEnrollments/${kioskUid}`), {
+  await update(ref(database, `${workspace.companyId}/kioskEnrollments/${deviceUid}`), {
     isActive: active,
     lastActiveAt: now,
     updatedAt: now,
   });
-  // The root pointer the tablet itself reads. `false` here — or a deleted node —
-  // leaves a restarting kiosk at PENDING_REGISTRATION showing its UID, which is
+  // The root pointer the device itself reads. `false` here — or a deleted node —
+  // leaves a restarting device at PENDING_REGISTRATION showing its UID, which is
   // what "deregistered" has to mean for the device.
-  await update(ref(database, `kioskEnrollments/${kioskUid}`), {
+  await update(ref(database, `kioskEnrollments/${deviceUid}`), {
     isActive: active,
     updatedAt: now,
   });
 }
 
-export async function deregisterKiosk(uid, branchId, kioskUid) {
-  await setKioskActive(uid, branchId, kioskUid, false);
+export async function deregisterDevice(uid, branchId, deviceUid) {
+  await setDeviceActive(uid, branchId, deviceUid, false);
 }
 
 export async function upgradeToSubscription(uid, branchId) {
@@ -728,7 +731,7 @@ export async function provisionTeamMember({
   const memberEmail = cleanText(email, 160);
 
   // A branch has one manager, and branchProfile/managerUid is the record the
-  // rules read to decide who may enrol kiosks and add staff.
+  // rules read to decide who may enrol devices and add staff.
   let replacedManagerUid = null;
 
   if (role === 'manager') {

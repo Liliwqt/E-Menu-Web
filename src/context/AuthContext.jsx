@@ -18,7 +18,7 @@ import { loadUserNickname, saveUserNickname } from '../lib/menuApi';
 import {
   createWorkspace,
   loadAccessContext,
-  registerKiosk,
+  registerDevice,
   deleteBranchToWorkspace,
 } from '../lib/workspaceApi';
 import { ROLE, can as canCap } from '../lib/permissions';
@@ -255,14 +255,14 @@ export function AuthProvider({ children }) {
     []
   );
 
-  const registerKioskForCurrentUser = useCallback(
-    async (kioskName, kioskUid, targetBranchId) => {
+  const registerDeviceForCurrentUser = useCallback(
+    async (deviceName, kioskUid, targetBranchId) => {
       if (!auth.currentUser) throw new Error('No user is currently signed in.');
       if (!workspace?.branchId) throw new Error('No workspace is set up yet.');
-      // The branch the kiosk is registered to must match the page the operator is
+      // The branch the device is registered to must match the page the operator is
       // viewing (e.g. branch 2), NOT the account's default branch (branch 1).
       const branchToRegister = targetBranchId || workspace.branchId;
-      await registerKiosk(auth.currentUser.uid, branchToRegister, kioskName, kioskUid);
+      await registerDevice(auth.currentUser.uid, branchToRegister, deviceName, kioskUid);
     },
     [workspace?.branchId]
   );
@@ -396,7 +396,7 @@ export function AuthProvider({ children }) {
         register,
         loginWithGoogle,
         completeWorkspace,
-        registerKioskForCurrentUser,
+        registerDeviceForCurrentUser,
         deleteBranchWithPassword,
         setWorkspaceFromProps,
         logout,

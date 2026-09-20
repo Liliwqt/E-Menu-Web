@@ -9,9 +9,9 @@ import { useBranchData } from '../context/BranchDataContext';
 import { useAuth } from '../context/AuthContext';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { isSubscriptionActive, FEATURE, hasFeature } from '../lib/planFeatures';
-import { deregisterKiosk, registerKiosk, setKioskActive } from '../lib/workspaceApi';
+import { deregisterDevice, registerDevice, setDeviceActive } from '../lib/workspaceApi';
 import { CAP } from '../lib/permissions';
-import '../styles/kiosks.css';
+import '../styles/devices.css';
 
 function formatRelativeTime(timestamp) {
   if (!timestamp) return 'Never';
@@ -26,68 +26,69 @@ function formatRelativeTime(timestamp) {
   return `${days}d ago`;
 }
 
-export default function KiosksPage() {
+export default function DevicesPage() {
   const { branchId } = useBranchData();
   const navigate = useNavigate();
   const { user, workspace, can } = useAuth();
   const { billing, status } = useSubscription();
   const subscriptionActive = isSubscriptionActive(billing);
-  // Two separate questions, both required: the plan has to include multi-kiosk,
+  // Two separate questions, both required: the plan has to include multi-device,
   // and the role has to be allowed to manage devices. hasFeature() alone was
   // only ever the first one, so a staff account on a subscribed branch saw the
   // register, enable/disable and deregister controls.
-  const canManage = can(CAP.MANAGE_KIOSKS) && hasFeature(billing, FEATURE.MULTI_KIOSK);
-  const [kiosks, setKiosks] = useState({});
+  const canManage = can(CAP.MANAGE_DEVICES) && hasFeature(billing, FEATURE.MULTI_DEVICES);
+  const [devices, setDevices] = useState({});
   const [loading, setLoading] = useState(true);
   const [workingUid, setWorkingUid] = useState(null);
   const [error, setError] = useState('');
   const [showRegister, setShowRegister] = useState(false);
-  const [kioskName, setKioskName] = useState('');
-  const [kioskUid, setKioskUid] = useState('');
+  const [deviceName, setDeviceName] = useState('');
+  const [deviceUid, setDeviceUid] = useState('');
 
   useEffect(() => {
     if (!branchId) return undefined;
-    const kiosksRef = ref(database, `${branchDataPath(branchId)}/kiosks`);
+    // NOTE: `/kiosks` is a persisted database path; it is not renamed.
+    const devicesRef = ref(database, `${branchDataPath(branchId)}/kiosks`);
     const handler = (snapshot) => {
-      setKiosks(snapshot.val() || {});
+      setDevices(snapshot.val() || {});
       setLoading(false);
     };
-    onValue(kiosksRef, handler);
-    return () => off(kiosksRef, 'value', handler);
+    onValue(devicesRef, handler);
+    return () => off(devicesRef, 'value', handler);
   }, [branchId]);
 
-  async function handleToggleActive(kioskUid, currentlyActive) {
+  async function handleToggleActive(deviceUid, currentlyActive) {
     if (!user?.uid) return;
     setError('');
-    setWorkingUid(kioskUid);
+    setWorkingUid(deviceUid);
     try {
       // Enable used to write only the branch and member records, leaving the root
       // pointer the tablet reads switched off — so the row said Active while the
       // device could never enrol itself again. One helper turns all four records
       // the same way, in both directions.
-      await setKioskActive(user.uid, branchId, kioskUid, !currentlyActive);
+      await setDeviceActive(user.uid, branchId, deviceUid, !currentlyActive);
     } catch (err) {
-      setError(err.message || 'Could not update kiosk status.');
+      setError(err.message || 'Could not update device status.');
     } finally {
       setWorkingUid(null);
     }
   }
 
-  // Which kiosk is awaiting confirmation. It is asked in the page, because the
+  // Which device is awaiting confirmation. It is asked in the page, because the
   // browser dialog this used to call is refused in a sandboxed frame and returns
-  // false in the Android WebView, where the kiosk admin screen actually runs.
+  // false in the Android WebView, where the device admin screen actually runs.
   const [confirmDeregister, setConfirmDeregister] = useState(null);
 
-  async function handleDeregister(kioskUid) {
+  async function handleDeregister(deviceUid) {
     setError('');
-    setWorkingUid(kioskUid);
+    setWorkingUid(deviceUid);
     try {
       if (user?.uid) {
-        await deregisterKiosk(user.uid, branchId, kioskUid);
+        await deregisterDevice(user.uid, branchId, deviceUid);
       }
       setConfirmDeregister(null);
     } catch (err) {
-      setError(err.message || 'Could not deregister kiosk.');
+      setError(err.message || 'Could not deregister device.');
     } finally {
       setWorkingUid(null);
     }
@@ -97,23 +98,23 @@ export default function KiosksPage() {
     event.preventDefault();
     if (!user?.uid) return;
     setError('');
-    setWorkingUid(kioskUid);
+    setWorkingUid(deviceUid);
     try {
-      await registerKiosk(user.uid, branchId, kioskName, kioskUid.trim());
-      setKioskName('');
-      setKioskUid('');
+      await registerDevice(user.uid, branchId, deviceName, deviceUid.trim());
+      setDeviceName('');
+      setDeviceUid('');
       setShowRegister(false);
     } catch (err) {
-      setError(err.message || 'Could not register kiosk.');
+      setError(err.message || 'Could not register device.');
     } finally {
       setWorkingUid(null);
     }
   }
 
-  const kioskList = Object.entries(kiosks).map(([uid, data]) => ({ uid, ...data }));
-  const activeCount = kioskList.filter((k) => k.isActive).length;
+  const deviceList = Object.entries(devices).map(([uid, data]) => ({ uid, ...data }));
+  const activeCount = deviceList.filter((k) => k.isActive).length;
 
-  if (status !== 'ready') return <div className="ks"><h1>Kiosks</h1><SubscriptionStatus /></div>;
+  if (status !== 'ready') return <div className="ks"><h1>Devices</h1><SubscriptionStatus /></div>;
 
   return (
     <div className="ks">
@@ -122,9 +123,9 @@ export default function KiosksPage() {
           <ChevronLeft size={18} /> Back to dashboard
         </button>
         <div>
-          <h1 className="ks__title">Kiosk devices</h1>
+          <h1 className="ks__title">Devices</h1>
           <p className="ks__subtitle">
-            Manage the Android tablets registered to this branch. Kiosks submit orders and decrement
+            Manage the Android tablets registered to this branch. Devices submit orders and decrement
             stock atomically; this view lets you monitor their status and revoke access.
           </p>
         </div>
@@ -134,9 +135,9 @@ export default function KiosksPage() {
         <div className="ks__notice" role="alert">
           <AlertTriangle size={18} />
           <div>
-            <strong>Subscription required.</strong> Multi-kiosk management is part of the
+            <strong>Subscription required.</strong> Multi-device management is part of the
             Subscription plan. You can see the devices already registered, but adding or
-            re-registering kiosks requires an active subscription.
+            re-registering devices requires an active subscription.
             <button
               type="button"
               className="ks__noticeLink"
@@ -151,7 +152,7 @@ export default function KiosksPage() {
       <section className="ks__summary">
         <div className="ks__summaryCard">
           <span className="ks__summaryLabel">Total devices</span>
-          <span className="ks__summaryValue">{kioskList.length}</span>
+          <span className="ks__summaryValue">{deviceList.length}</span>
         </div>
         <div className="ks__summaryCard">
           <span className="ks__summaryLabel">Active now</span>
@@ -167,7 +168,7 @@ export default function KiosksPage() {
 
       {canManage && (
         <button type="button" className="ks__register" onClick={() => setShowRegister(true)}>
-          <Plus size={16} /> Register kiosk
+          <Plus size={16} /> Register device
         </button>
       )}
 
@@ -176,10 +177,10 @@ export default function KiosksPage() {
       <section className="ks__list">
         {loading ? (
           <div className="ks__empty">Loading devices…</div>
-        ) : kioskList.length === 0 ? (
+        ) : deviceList.length === 0 ? (
           <div className="ks__empty">
             <Monitor size={28} />
-            <h2>No kiosks registered yet</h2>
+            <h2>No devices registered yet</h2>
             <p>
               Open the E-Menu Android app on a tablet, sign in with the same Google account used
               here, and complete the setup flow. The device will appear here automatically.
@@ -187,36 +188,36 @@ export default function KiosksPage() {
           </div>
         ) : (
           <ul className="ks__items">
-            {kioskList.map((kiosk) => (
-              <li key={kiosk.uid} className={`ks__item ${kiosk.isActive ? 'is-active' : 'is-inactive'}`}>
+            {deviceList.map((device) => (
+              <li key={device.uid} className={`ks__item ${device.isActive ? 'is-active' : 'is-inactive'}`}>
                 <div className="ks__itemMain">
                   <div className="ks__itemIcon">
                     <Monitor size={22} />
                   </div>
                   <div>
-                    <h3 className="ks__itemName">{kiosk.name || 'Unnamed kiosk'}</h3>
+                    <h3 className="ks__itemName">{device.name || 'Unnamed device'}</h3>
                     <p className="ks__itemMeta">
-                      <span>UID: <code>{kiosk.uid}</code></span>
+                      <span>UID: <code>{device.uid}</code></span>
                       <span>·</span>
-                      <span>Registered: {formatRelativeTime(kiosk.registeredAt)}</span>
+                      <span>Registered: {formatRelativeTime(device.registeredAt)}</span>
                       <span>·</span>
-                      <span>Last active: {formatRelativeTime(kiosk.lastActiveAt)}</span>
+                      <span>Last active: {formatRelativeTime(device.lastActiveAt)}</span>
                     </p>
                   </div>
                 </div>
                 <div className="ks__itemActions">
-                  <span className={`ks__statusBadge ${kiosk.isActive ? 'is-on' : 'is-off'}`}>
-                    {kiosk.isActive ? 'Active' : 'Disabled'}
+                  <span className={`ks__statusBadge ${device.isActive ? 'is-on' : 'is-off'}`}>
+                    {device.isActive ? 'Active' : 'Disabled'}
                   </span>
                   {canManage && (
                     <>
                       <button
                         type="button"
                         className="ks__btn"
-                        onClick={() => handleToggleActive(kiosk.uid, kiosk.isActive)}
-                        disabled={workingUid === kiosk.uid}
+                        onClick={() => handleToggleActive(device.uid, device.isActive)}
+                        disabled={workingUid === device.uid}
                       >
-                        {kiosk.isActive ? (
+                        {device.isActive ? (
                           <><Power size={14} /> Disable</>
                         ) : (
                           <><RefreshCw size={14} /> Enable</>
@@ -225,8 +226,8 @@ export default function KiosksPage() {
                       <button
                         type="button"
                         className="ks__btn ks__btn--danger"
-                        onClick={() => setConfirmDeregister(kiosk)}
-                        disabled={workingUid === kiosk.uid}
+                        onClick={() => setConfirmDeregister(device)}
+                        disabled={workingUid === device.uid}
                       >
                         Deregister
                       </button>
@@ -240,17 +241,17 @@ export default function KiosksPage() {
       </section>
 
       {showRegister && (
-        <div className="ks__dialog" role="dialog" aria-modal="true" aria-labelledby="register-kiosk-title">
+        <div className="ks__dialog" role="dialog" aria-modal="true" aria-labelledby="register-device-title">
           <div className="ks__dialogCard">
             <button type="button" className="ks__dialogClose" onClick={() => setShowRegister(false)} aria-label="Close">
               <X size={18} />
             </button>
-            <h2 id="register-kiosk-title">Register Android kiosk</h2>
-            <p>Enter the anonymous UID shown on the kiosk registration screen.</p>
+            <h2 id="register-device-title">Register Android device</h2>
+            <p>Enter the anonymous UID shown on the device registration screen.</p>
             <form onSubmit={handleRegister}>
-              <label>Kiosk name<input value={kioskName} onChange={(event) => setKioskName(event.target.value)} required maxLength={60} placeholder="Nivel Hills Kiosk 1" /></label>
-              <label>Anonymous kiosk UID<input value={kioskUid} onChange={(event) => setKioskUid(event.target.value)} required maxLength={128} placeholder="Paste the UID from the tablet" /></label>
-              <button type="submit" className="ks__btn ks__btn--primary" disabled={workingUid === kioskUid}>Register this kiosk</button>
+              <label>Device name<input value={deviceName} onChange={(event) => setDeviceName(event.target.value)} required maxLength={60} placeholder="Nivel Hills Device 1" /></label>
+              <label>Anonymous device UID<input value={deviceUid} onChange={(event) => setDeviceUid(event.target.value)} required maxLength={128} placeholder="Paste the UID from the tablet" /></label>
+              <button type="submit" className="ks__btn ks__btn--primary" disabled={workingUid === deviceUid}>Register this device</button>
             </form>
           </div>
         </div>
@@ -259,10 +260,10 @@ export default function KiosksPage() {
       <ConfirmDialog
         open={Boolean(confirmDeregister)}
         tone="danger"
-        title="Deregister this kiosk?"
+        title="Deregister this device?"
         message={
-          'The tablet stops taking orders immediately and will not enrol itself again until this kiosk is enabled. '
-          + `${confirmDeregister?.name ? `"${confirmDeregister.name}" ` : 'This kiosk '}`
+          'The tablet stops taking orders immediately and will not enrol itself again until this device is enabled. '
+          + `${confirmDeregister?.name ? `"${confirmDeregister.name}" ` : 'This device '}`
           + 'stays in this list as Disabled, and Enable lets it back in.'
         }
         confirmLabel="Deregister"

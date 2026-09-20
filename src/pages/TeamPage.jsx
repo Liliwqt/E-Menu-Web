@@ -14,14 +14,14 @@ const ROLE_CARDS = [
   {
     id: ROLE.MANAGER,
     label: 'Branch Manager',
-    blurb: 'Runs this branch day to day: menu, stock, orders, kiosks and staff.',
+    blurb: 'Runs this branch day to day: menu, stock, orders, devices and staff.',
     cannot: 'Cannot add branches, change billing, or appoint other managers.',
   },
   {
     id: ROLE.STAFF,
     label: 'Staff',
     blurb: 'Service floor access: adjust stock and mark items unavailable.',
-    cannot: 'Cannot edit the menu, delete items, trash orders, or manage kiosks.',
+    cannot: 'Cannot edit the menu, delete items, trash orders, or manage devices.',
   },
 ];
 

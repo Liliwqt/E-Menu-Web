@@ -1,26 +1,26 @@
 import { useState } from 'react';
 import { Monitor, X } from 'lucide-react';
-import { enterKioskMode } from '../../lib/kioskBridge';
+import { enterMenuMode } from '../../lib/deviceBridge';
 import { useAuth } from '../../context/AuthContext';
 
 /**
- * Modal shown when the operator taps the kiosk toggle in the AppShell header.
+ * Modal shown when the operator taps the device toggle in the AppShell header.
  *
  * It asks ONLY for a device identity name. On confirm it:
  *  1. Registers the device's anonymous Firebase UID under the signed-in account
- *     at the CURRENT page's branch (branchId prop), so a kiosk registered while
+ *     at the CURRENT page's branch (branchId prop), so a device registered while
  *     viewing branch 2 enrolls to branch 2 — not the account's default branch.
  *  2. Hands the workspace company/branch IDs to the Android shell, which
- *     provisions the native menu and enters locked kiosk mode.
+ *     provisions the native menu and enters locked device mode.
  */
-export default function KioskRegisterDialog({
+export default function DeviceRegisterDialog({
   open,
   onClose,
   deviceUid,
   companyId,
   branchId,
 }) {
-  const { registerKioskForCurrentUser } = useAuth();
+  const { registerDeviceForCurrentUser } = useAuth();
   const [name, setName] = useState('');
   const [working, setWorking] = useState(false);
   const [error, setError] = useState('');
@@ -30,8 +30,8 @@ export default function KioskRegisterDialog({
   async function confirm(e) {
     e.preventDefault();
     setError('');
-    const kioskName = name.trim();
-    if (!kioskName) {
+    const deviceName = name.trim();
+    if (!deviceName) {
       setError('Enter a name for this device.');
       return;
     }
@@ -43,10 +43,10 @@ export default function KioskRegisterDialog({
     try {
       // Register to the branch the operator is currently viewing (branchId),
       // not the workspace's default branch.
-      await registerKioskForCurrentUser(kioskName, deviceUid, branchId);
+      await registerDeviceForCurrentUser(deviceName, deviceUid, branchId);
       onClose();
-      // Now enter the native locked kiosk menu.
-      enterKioskMode({ companyId, branchId });
+      // Now enter the native locked device menu.
+      enterMenuMode({ companyId, branchId });
     } catch (err) {
       setError(err.message || 'Unable to register this device.');
     } finally {
@@ -66,8 +66,8 @@ export default function KioskRegisterDialog({
         <header className="kr__head">
           <div className="kr__icon"><Monitor size={18} /></div>
           <div className="kr__headText">
-            <h2 id="kr-title">Register this device as a kiosk</h2>
-            <p>Name this device so you can identify it in the Kiosks page.</p>
+            <h2 id="kr-title">Register this device as a device</h2>
+            <p>Name this device so you can identify it in the Devices page.</p>
           </div>
           <button type="button" className="kr__close" onClick={onClose} aria-label="Close" disabled={working}>
             <X size={16} />
@@ -100,7 +100,7 @@ export default function KioskRegisterDialog({
               Cancel
             </button>
             <button type="submit" className="btn btn--primary" disabled={working || !name.trim()}>
-              {working ? 'Registering…' : 'Register & enter kiosk'}
+              {working ? 'Registering…' : 'Register & enter device'}
             </button>
           </div>
         </form>

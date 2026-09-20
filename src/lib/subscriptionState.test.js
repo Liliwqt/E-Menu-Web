@@ -53,7 +53,7 @@ test('billing changes are a single atomic multi-location write', async () => {
   }
 });
 test('subscription consumers use shared billing and provider wraps the AI scheduler', () => {
-  for(const file of ['../pages/SubscriptionPage.jsx','../pages/KiosksPage.jsx','../hooks/useAiAccess.js','../components/ui/UpgradePrompt.jsx'])assert.match(fs.readFileSync(new URL(file,import.meta.url),'utf8'),/useSubscription\(/,file);
+  for(const file of ['../pages/SubscriptionPage.jsx','../pages/DevicesPage.jsx','../hooks/useAiAccess.js','../components/ui/UpgradePrompt.jsx'])assert.match(fs.readFileSync(new URL(file,import.meta.url),'utf8'),/useSubscription\(/,file);
   const main=fs.readFileSync(new URL('../main.jsx',import.meta.url),'utf8');assert.ok(main.includes('<SubscriptionProvider>'));assert.ok(main.indexOf('<SubscriptionProvider>')<main.indexOf('<LiveAnalystProvider>'));
   const provider=fs.readFileSync(new URL('../context/SubscriptionContext.jsx',import.meta.url),'utf8');assert.match(provider,/state\?\.key === key/);assert.match(provider,/state.attempt === attempt/);assert.match(provider,/state.scope === scope/);
 });

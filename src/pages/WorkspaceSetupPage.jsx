@@ -13,7 +13,7 @@ const PLANS = [
     description: 'Run the daily restaurant operation without AI.',
     features: [
       'Menu and inventory management',
-      'Live kiosk orders',
+      'Live device orders',
       'Basic sales dashboard',
       'Order history',
     ],
@@ -27,7 +27,7 @@ const PLANS = [
       'AI Operations Analyst and chat',
       'AI reports and executive presentation',
       'Proactive AI insights',
-      'Multi-kiosk management',
+      'Multi-device management',
     ],
   },
 ];

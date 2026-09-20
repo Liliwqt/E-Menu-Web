@@ -466,7 +466,7 @@ export default function MenuPage() {
 
               {/* Renaming in place. This previously used window.prompt(), which is
                   refused by any page inside a sandboxed frame and silently returns
-                  null in the Android WebView the kiosk uses — the button looked
+                  null in the Android WebView the device uses — the button looked
                   live and did nothing. An input also lets the name be checked here,
                   where a bad one can be corrected, instead of after the fact. */}
               {renaming === cat && (

@@ -97,7 +97,7 @@ describe('the capability matrix', () => {
   const managerPlus = [
     CAP.MANAGE_MENU, CAP.MANAGE_ITEMS, CAP.DELETE_MENU_ITEM, CAP.DELETE_CATEGORY,
     CAP.RENAME_CATEGORY, CAP.EDIT_THRESHOLDS, CAP.TRASH_ORDER, CAP.CORRECT_ANALYTICS,
-    CAP.MANAGE_KIOSKS, CAP.EXPORT_REPORTS, CAP.USE_AI, CAP.MANAGE_STAFF,
+    CAP.MANAGE_DEVICES, CAP.EXPORT_REPORTS, CAP.USE_AI, CAP.MANAGE_STAFF,
   ];
   const everyone = [CAP.TOGGLE_AVAILABILITY, CAP.ADJUST_STOCK, CAP.VIEW_ANALYTICS];
 
@@ -110,7 +110,7 @@ describe('the capability matrix', () => {
   });
 
   it('gives managers everything below the owner-only tier', () => {
-    // Each of these was a real gap at some point: thresholds, kiosks, billing and
+    // Each of these was a real gap at some point: thresholds, devices, billing and
     // the AI analyst were all reachable by a role that should not have had them.
     for (const cap of managerPlus) {
       assert.equal(can(ROLE.MANAGER, cap), true, `manager should have ${cap}`);

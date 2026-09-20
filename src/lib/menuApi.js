@@ -487,7 +487,7 @@ export function onDeletedLogsChange(branchId, callback, onError) {
 // Moves a log from '{branchId}/logs' to '{branchId}/deletedLogs'
 export async function deleteLogToBin(branchId, orderNum, logData) {
   if (logData?.orderSource === 'android_kiosk') {
-    throw new Error('Kiosk orders are immutable and cannot be moved to trash from the portal.');
+    throw new Error('Device orders are immutable and cannot be moved to trash from the portal.');
   }
 
   try {

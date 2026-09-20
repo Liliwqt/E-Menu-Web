@@ -47,7 +47,7 @@ const OrdersPage = lazyPage(() => import('./pages/OrdersPage'));
 const MenuPage = lazyPage(() => import('./pages/MenuPage'));
 const ReportsPage = lazyPage(() => import('./pages/ReportsPage'));
 const HistoryPage = lazyPage(() => import('./pages/HistoryPage'));
-const KiosksPage = lazyPage(() => import('./pages/KiosksPage'));
+const DevicesPage = lazyPage(() => import('./pages/DevicesPage'));
 const SubscriptionPage = lazyPage(() => import('./pages/SubscriptionPage'));
 const TeamPage = lazyPage(() => import('./pages/TeamPage'));
 
@@ -68,7 +68,7 @@ function ProtectedRoute({ children }) {
 
   // The URL may name the branch (`/home/branch1`) or use its id. Everything below
   // reads data with the id, so the segment is resolved before any decision is
-  // taken. The kiosk bridge is handed this resolved value too, and it validates
+  // taken. The device bridge is handed this resolved value too, and it validates
   // the id shape, so passing the nicer form through would break provisioning.
   const resolvedBranchId = resolveBranchRef(workspace, branchRef);
 
@@ -138,7 +138,7 @@ function SetupRoute() {
 function BranchScope({ children }) {
   const { workspace, user } = useAuth();
   const { branchId: branchRef } = useParams();
-  // Every consumer of this provider — the shell, its nav paths, the kiosk bridge,
+  // Every consumer of this provider — the shell, its nav paths, the device bridge,
   // the processors and the pages — needs the real id, not the readable form.
   const branchId = resolveBranchRef(workspace, branchRef);
   return <BranchDataProvider key={`${user?.uid}:${workspace?.companyId}:${branchId}`} branchId={branchId}>{children}</BranchDataProvider>;
@@ -196,7 +196,7 @@ export default function App() {
             product call, not a technical one — HistoryPage renders correctly either
             way, so only this capability and the nav entry change together. */}
         <Route path="/analytics-history/:branchId" element={branchRoute(HistoryPage, CAP.CORRECT_ANALYTICS)} />
-        <Route path="/kiosks/:branchId" element={branchRoute(KiosksPage, CAP.MANAGE_KIOSKS)} />
+        <Route path="/devices/:branchId" element={branchRoute(DevicesPage, CAP.MANAGE_DEVICES)} />
         <Route path="/team/:branchId" element={branchRoute(TeamPage, CAP.MANAGE_STAFF)} />
         {/* Members can read the branch plan; SubscriptionPage gates changes to the owner. */}
         <Route path="/subscription/:branchId" element={branchRoute(SubscriptionPage)} />

@@ -12,10 +12,10 @@ import { useBranchData } from '../../context/BranchDataContext';
 import { useLiveAnalyst } from '../../context/LiveAnalystProvider';
 import { branchLabel } from '../../lib/branchLabel';
 import { useAiAccess } from '../../hooks/useAiAccess';
-import { isEmbeddedInKiosk, enterKioskMode, getDeviceUid } from '../../lib/kioskBridge';
+import { isEmbeddedInApp, enterMenuMode, getDeviceUid } from '../../lib/deviceBridge';
 import { CAP, roleLabel } from '../../lib/permissions';
 import SettingsModal from './SettingsModal';
-import KioskRegisterDialog from './KioskRegisterDialog';
+import DeviceRegisterDialog from './DeviceRegisterDialog';
 import AINotificationPanel from '../ai/AINotificationPanel';
 import HelpCenter from '../help/HelpCenter';
 import Modal from '../ui/Modal';
@@ -38,7 +38,7 @@ const NAV_INSIGHTS = [
 
 const NAV_SETTINGS = [
   { key: 'team', label: 'Team', icon: Users, path: (b) => `/team/${b}`, cap: CAP.MANAGE_STAFF },
-  { key: 'kiosks', label: 'Kiosks', icon: Monitor, path: (b) => `/kiosks/${b}`, cap: CAP.MANAGE_KIOSKS },
+  { key: 'devices', label: 'Devices', icon: Monitor, path: (b) => `/devices/${b}`, cap: CAP.MANAGE_DEVICES },
   { key: 'subscription', label: 'Subscription', icon: CreditCard, path: (b) => `/subscription/${b}` },
 ];
 
@@ -55,7 +55,7 @@ function activeKeyFor(pathname) {
   if (pathname.includes('/orders/')) return 'orders';
   if (pathname.includes('/menu/')) return 'menu';
   if (pathname.includes('/reports/')) return 'reports';
-  if (pathname.includes('/kiosks/')) return 'kiosks';
+  if (pathname.includes('/devices/')) return 'devices';
   if (pathname.includes('/team/')) return 'team';
   if (pathname.includes('/subscription/')) return 'subscription';
   return 'home';
@@ -72,7 +72,7 @@ export default function AppShell({ children, title }) {
   const [aiAction, setAiAction] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
-  const [kioskDialogOpen, setKioskDialogOpen] = useState(false);
+  const [deviceDialogOpen, setDeviceDialogOpen] = useState(false);
   const [deviceUid, setDeviceUid] = useState('');
   const [moreOpen, setMoreOpen] = useState(false);
   // Role and plan together. isAiEnabled() alone is only the plan half.
@@ -100,7 +100,7 @@ export default function AppShell({ children, title }) {
   const branchName = branchLabel({ workspace, branchId });
   const displayName = nickname || user?.email?.split('@')[0] || 'Manager';
   const initials = displayName.slice(0, 2).toUpperCase();
-  const embeddedInKiosk = isEmbeddedInKiosk();
+  const embeddedInApp = isEmbeddedInApp();
 
   // Navigation is filtered by capability, so a staff account never sees a door
   // it cannot open. The rules enforce the same matrix server-side.
@@ -118,21 +118,21 @@ export default function AppShell({ children, title }) {
   const go = (item) => navigate(item.path(branchId));
 
   /**
-   * Kiosk header toggle handler.
+   * Device header toggle handler.
    * Reads the device's anonymous Firebase UID from the Android bridge. If present,
    * opens the registration dialog (asks only for a name, auto-registers the UID
-   * under the signed-in account, then enters kiosk mode). If the bridge does not
-   * provide a UID (fallback), enters kiosk mode directly with existing state.
+   * under the signed-in account, then enters device mode). If the bridge does not
+   * provide a UID (fallback), enters device mode directly with existing state.
    */
-  function handleKioskClick() {
+  function handleDeviceClick() {
     const uid = getDeviceUid();
     if (uid) {
       setDeviceUid(uid);
-      setKioskDialogOpen(true);
+      setDeviceDialogOpen(true);
       return;
     }
-    // Fallback: no UID available (older bridge) — go straight to kiosk.
-    enterKioskMode({ companyId: workspace?.companyId, branchId });
+    // Fallback: no UID available (older bridge) — go straight to device.
+    enterMenuMode({ companyId: workspace?.companyId, branchId });
   }
 
   return (
@@ -236,12 +236,12 @@ export default function AppShell({ children, title }) {
             <button className="btn btn--ghost btn--icon" onClick={() => setHelpOpen(true)} aria-label="Help Center" title="Help Center">
               <HelpCircle size={18} />
             </button>
-            {embeddedInKiosk && (
+            {embeddedInApp && (
               <button
                 className="btn btn--ghost btn--icon"
-                onClick={handleKioskClick}
-                aria-label="Enter kiosk mode"
-                title="Register this device as a kiosk and enter kiosk mode"
+                onClick={handleDeviceClick}
+                aria-label="Enter device mode"
+                title="Register this device as a device and enter device mode"
               >
                 <Monitor size={18} />
               </button>
@@ -274,12 +274,12 @@ export default function AppShell({ children, title }) {
             <button className="btn btn--ghost btn--icon btn--sm" onClick={toggleTheme} aria-label="Toggle theme">
               {theme === 'light' ? <Moon size={17} /> : <Sun size={17} />}
             </button>
-            {embeddedInKiosk && (
+            {embeddedInApp && (
               <button
                 className="btn btn--ghost btn--icon btn--sm"
-                onClick={handleKioskClick}
-                aria-label="Enter kiosk mode"
-                title="Register this device as a kiosk and enter kiosk mode"
+                onClick={handleDeviceClick}
+                aria-label="Enter device mode"
+                title="Register this device as a device and enter device mode"
               >
                 <Monitor size={17} />
               </button>
@@ -372,9 +372,9 @@ export default function AppShell({ children, title }) {
 
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
 
-      <KioskRegisterDialog
-        open={kioskDialogOpen}
-        onClose={() => setKioskDialogOpen(false)}
+      <DeviceRegisterDialog
+        open={deviceDialogOpen}
+        onClose={() => setDeviceDialogOpen(false)}
         deviceUid={deviceUid}
         companyId={workspace?.companyId}
         branchId={branchId}

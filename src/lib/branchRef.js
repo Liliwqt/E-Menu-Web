@@ -2,8 +2,8 @@
  * Reading and writing a branch in a URL.
  *
  * Branch ids are machine keys — `branch-<company>-<branch>-<random>` — and they
- * are what the routes, the kiosk enrolment records and the database rules are all
- * keyed on. They cannot be changed without invalidating a kiosk's saved
+ * are what the routes, the device enrolment records and the database rules are all
+ * keyed on. They cannot be changed without invalidating a device's saved
  * configuration, so the id stays exactly as it is and the URL carries it too.
  *
  * Which leaves the URL reading like `/home/branch-test1-branch1-85sr93`. That is
