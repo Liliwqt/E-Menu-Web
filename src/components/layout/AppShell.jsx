@@ -203,9 +203,14 @@ export default function AppShell({ children, title }) {
         </nav>
 
         <div className="shell__footer">
-          <button className="shell__navItem" onClick={toggleTheme}>
-            {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
-            {theme === 'light' ? 'Dark mode' : 'Light mode'}
+          {/* Same control as the mobile header: a ghost icon-only button. */}
+          <button
+            className="btn btn--ghost btn--icon btn--sm"
+            onClick={toggleTheme}
+            aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+            title={theme === 'light' ? 'Dark mode' : 'Light mode'}
+          >
+            {theme === 'light' ? <Moon size={17} /> : <Sun size={17} />}
           </button>
           <button className="shell__user" onClick={() => setSettingsOpen(true)} title="Account settings">
             <div className="shell__avatar">{initials}</div>
