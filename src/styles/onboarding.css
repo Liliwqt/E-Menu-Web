@@ -1,4 +1,4 @@
-.onboard { min-height: 100dvh; padding: clamp(20px, 5vw, 64px); display: grid; place-items: center; background: radial-gradient(circle at top left, rgba(185, 137, 73, .2), transparent 42%), var(--bg); }
+.onboard { min-height: 100%; padding: clamp(20px, 5vw, 64px); display: grid; place-items: center; background: radial-gradient(circle at top left, rgba(185, 137, 73, .2), transparent 42%), var(--bg); }
 .onboard__card { width: min(900px, 100%); padding: clamp(24px, 5vw, 48px); border: 1px solid var(--border); border-radius: var(--r-xl); background: var(--surface); box-shadow: var(--shadow-lg); }
 .onboard__header { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 32px; }
 .onboard__mark { display: grid; place-items: center; flex: 0 0 46px; width: 46px; height: 46px; border-radius: 14px; color: white; background: var(--primary); }

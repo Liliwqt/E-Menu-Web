@@ -30,7 +30,8 @@ export class ErrorBoundary extends React.Component {
   render() {
     if (this.state.error) {
       return (
-        <div style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', padding: 24, background: 'var(--bg)', color: 'var(--text-1)', fontFamily: 'var(--font-ui)' }}>
+        // `100%` of #root, not `100dvh` — viewport units are 0 in the Android WebView.
+        <div style={{ minHeight: '100%', display: 'grid', placeItems: 'center', padding: 24, background: 'var(--bg)', color: 'var(--text-1)', fontFamily: 'var(--font-ui)' }}>
           <div style={{ textAlign: 'center', maxWidth: 420 }}>
             <h1 style={{ fontSize: '1.4rem', marginBottom: 8 }}>Something went wrong</h1>
             <p style={{ color: 'var(--text-3)', marginBottom: 20 }}>

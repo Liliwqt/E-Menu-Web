@@ -241,7 +241,8 @@
 .team__dialog {
   width: 100%;
   max-width: 460px;
-  max-height: 90dvh;
+  /* Parent is .team__overlay (position: fixed; inset: 0) — `%`, not `90dvh`. */
+  max-height: 90%;
   overflow-y: auto;
   display: grid;
   gap: var(--sp-4);
@@ -337,5 +338,5 @@
 @media (max-width: 640px) {
   .team__panelHead { padding: var(--sp-3); }
   .team__row { padding: 11px var(--sp-3); }
-  .team__dialog { max-height: 92dvh; }
+  .team__dialog { max-height: 92%; }
 }

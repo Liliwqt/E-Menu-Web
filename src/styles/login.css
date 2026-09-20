@@ -5,7 +5,8 @@
    subtle: focus rings, inline loading spinner, safe-area padding. */
 
 .lg__page {
-  min-height: 100dvh;
+  /* `%`, not `100dvh` — viewport units are 0 in the Android WebView. */
+  min-height: 100%;
   background-image: url(/background_image.jpg.webp);
   background-size: cover;
   background-position: center;
@@ -304,7 +305,8 @@
 
 .lg__modal {
   width: min(520px, 100%);
-  max-height: min(680px, 88dvh);
+  /* Parent is .lg__modalOverlay (position: fixed; inset: 0) — `%`, not `88dvh`. */
+  max-height: min(680px, 90%);
   overflow: auto;
   background: #2d2d2d;
   border: 1px solid #5a5a5a;

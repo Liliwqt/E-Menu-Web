@@ -156,8 +156,10 @@
   right: 24px;
   bottom: 24px;
   z-index: var(--z-drawer);
-  height: 25vh;
-  max-height: 25vh;
+  /* `%` of the viewport (this panel is position: fixed), not `25vh` — viewport
+     units are 0 in the Android WebView, which made the panel zero-height. */
+  height: 25%;
+  max-height: 25%;
   background: var(--surface);
   border: 2px solid var(--border-strong);
   border-radius: var(--r-lg);
@@ -456,8 +458,8 @@
     left: 8px;
     right: 8px;
     bottom: calc(68px + env(safe-area-inset-bottom));
-    height: 28vh;
-    max-height: 28vh;
+    height: 28%;
+    max-height: 28%;
   }
   .np__grid {
     grid-template-columns: 1fr;

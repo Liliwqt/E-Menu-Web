@@ -1,6 +1,6 @@
 /* ── Executive AI Presentation — cinematic café-boardroom ────────
    Layout rules that keep every slide visible on every screen:
-   · .pres is a fixed 100dvh flex column; header/footer never shrink.
+   · .pres is a fixed, viewport-tall flex column; header/footer never shrink.
    · .pres__stage is the ONLY scroll container (min-height: 0).
    · .pres__scene uses margin:auto — perfectly centered when it fits,
      top-anchored and fully scrollable when taller than the viewport.
@@ -9,7 +9,9 @@
 .pres {
   position: fixed;
   inset: 0;
-  height: 100dvh;
+  /* `%` of the viewport (position: fixed), not `100dvh` — viewport units are 0
+     in the Android WebView. */
+  height: 100%;
   z-index: var(--z-modal);
   display: flex;
   flex-direction: column;
@@ -64,7 +66,9 @@
   width: 100%;
   max-width: 880px;
   display: grid;
-  gap: clamp(var(--sp-4), 2.4vh, var(--sp-6));
+  /* `%`, not `2.4vh`: the preferred value would be 0 in the Android WebView and
+     clamp() would then always take the minimum. Bounded by sp-4..sp-6 either way. */
+  gap: clamp(var(--sp-4), 2.4%, var(--sp-6));
   animation: presIn 600ms var(--ease-out) backwards;
 }
 
@@ -118,7 +122,7 @@
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: var(--r-xl);
-  padding: clamp(var(--sp-4), 2.4vh, var(--sp-6));
+  padding: clamp(var(--sp-4), 2.4%, var(--sp-6));
 }
 
 .pres__compare {

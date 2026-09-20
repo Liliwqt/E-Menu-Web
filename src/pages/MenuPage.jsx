@@ -632,7 +632,10 @@ export default function MenuPage() {
         {auditStatus !== 'ready' ? <ReadState label="change log" resource={{ status: auditStatus, retry: () => setAuditAttempt((n) => n + 1) }} /> : menuLogs.length === 0 ? (
           <p className="card-sub">No menu changes recorded yet.</p>
         ) : (
-          <div style={{ display: 'grid', gap: 8, maxHeight: '55vh', overflowY: 'auto' }}>
+          // Fixed cap, not `55vh`: viewport units are 0 in the Android WebView,
+          // and `%` would not resolve because .modal-panel's own height is auto
+          // (only its max-height is bounded). The panel scrolls regardless.
+          <div style={{ display: 'grid', gap: 8, maxHeight: 360, overflowY: 'auto' }}>
             {menuLogs.slice(0, 100).map((log) => (
               <div className="alert-row" key={log.id}>
                 <span style={{ flex: 1, color: 'var(--text-2)' }}>{log.action}</span>

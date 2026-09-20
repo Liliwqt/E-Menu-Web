@@ -30,7 +30,8 @@ export default function AccessErrorScreen() {
   return (
     <div
       style={{
-        minHeight: '100dvh',
+        // `100%` of #root, not `100dvh` — viewport units are 0 in the Android WebView.
+        minHeight: '100%',
         display: 'grid',
         placeItems: 'center',
         padding: 24,

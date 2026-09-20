@@ -8,8 +8,30 @@
   box-sizing: border-box;
 }
 
+/* ── Viewport units do not work in the Android WebView ──────────────────
+   The app embeds this site in a WebView where `vh`, `dvh`, `svh` and `lvh` ALL
+   compute to 0px (verified on WebView 151.0.7922.199: innerHeight is correct at
+   737px while 100vh is 0px), persistently and in both orientations. `vw` is
+   fine. The CSS is valid and `CSS.supports()` reports these units as supported,
+   so a desktop browser renders them correctly — only the WebView shows the bug.
+
+   `min(86vh, 720px)` therefore becomes `min(0, 720px)` = `0`, which collapses a
+   box to its padding and, with `overflow-y: auto`, turns it into a sliver. So:
+   never use a vh-family unit for layout that must work inside the app.
+
+   Use `%` instead. It resolves against the containing block, which for the
+   `position: fixed; inset: 0` overlays used by every modal is the viewport —
+   giving the same intended result in both environments. Layout that sits in
+   normal flow needs a definite-height ancestor chain, which is why the three
+   root elements below carry `height: 100%`.
+   NOTE: `@supports` cannot detect this; there is no CSS-only fallback, because
+   `0px` is a perfectly valid computed value.
+   ----------------------------------------------------------------------- */
+
 html {
   -webkit-text-size-adjust: 100%;
+  /* Definite height for the percentage chain below. */
+  height: 100%;
 }
 
 body {
@@ -22,7 +44,16 @@ body {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   transition: background var(--dur-med) ease, color var(--dur-med) ease;
+  /* `height` (not `min-height`), because a percentage child needs a definite
+     parent height to resolve against. Content taller than the viewport still
+     scrolls normally on <html>, and the page background stays painted because
+     the root element's background propagates to the canvas. */
+  height: 100%;
 }
+
+/* Mount point for the React app — completes the chain so `.shell`, `.lg__page`
+   and `.onboard` can use `min-height: 100%` to fill the viewport. */
+#root { height: 100%; }
 
 h1, h2, h3, h4 {
   margin: 0;
@@ -379,7 +410,9 @@ img { max-width: 100%; display: block; }
 .modal-panel {
   width: 100%;
   max-width: 520px;
-  max-height: min(86vh, 720px);
+  /* `%` of .modal-scrim (position: fixed; inset: 0), NOT `86vh` — see the
+     viewport-unit note at the top of this file. */
+  max-height: min(100%, 720px);
   overflow-y: auto;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -435,7 +468,8 @@ img { max-width: 100%; display: block; }
   display: flex;
   width: 100%;
   max-width: 960px;
-  max-height: min(88vh, 760px);
+  /* Rendered inside .modal-scrim — see the viewport-unit note at the top. */
+  max-height: min(100%, 760px);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-xl);

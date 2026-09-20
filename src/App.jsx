@@ -55,7 +55,9 @@ const TeamPage = lazyPage(() => import('./pages/TeamPage'));
 
 function FullScreenLoader() {
   return (
-    <div style={{ display: 'grid', placeItems: 'center', height: '100dvh', background: 'var(--bg)' }}>
+    // `100%` of #root, not `100dvh`: viewport units resolve to 0 in the Android
+    // WebView, which collapsed this loader. See the note in src/styles/base.css.
+    <div style={{ display: 'grid', placeItems: 'center', height: '100%', background: 'var(--bg)' }}>
       <div className="spinner spinner--lg" aria-label="Loading" />
     </div>
   );
