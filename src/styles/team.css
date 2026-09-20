@@ -1,7 +1,13 @@
+/* Standalone page (no app shell), so it carries its own page framing.
+   Centring and padding must match the sibling standalone pages — .ks (Devices)
+   and .sub (Subscription) — which use the same margin/padding pair. Without it
+   the content sat flush against the viewport's top-left corner. */
 .team {
   display: grid;
   gap: var(--sp-5);
   max-width: 920px;
+  margin: 0 auto;
+  padding: 32px 24px 80px;
 }
 
 .team__header { display: grid; gap: var(--sp-3); }
