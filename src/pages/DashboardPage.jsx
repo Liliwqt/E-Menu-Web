@@ -23,6 +23,8 @@ import {
 import { buildRecommendations } from '../lib/recommendations';
 import { generateAIAnalysis } from '../lib/aiAnalystService';
 import { useAiAccess, useAiDenial } from '../hooks/useAiAccess';
+import ReadState from '../components/ui/ReadState';
+import { CAP } from '../lib/permissions';
 import UpgradePrompt from '../components/ui/UpgradePrompt';
 import '../styles/dashboard.css';
 
@@ -106,9 +108,9 @@ function SectionCard({ title, sub, icon: Icon, children, className = '', action 
 
 export default function DashboardPage() {
   const navigate = useNavigate();
-  const { user, nickname, workspace } = useAuth();
+  const { user, nickname, workspace, can } = useAuth();
   const {
-    branchId, analytics, analyticsLoaded, inventory, logs, aiAnalyticsData, hasOrders,
+    branchId, analytics, analyticsLoaded, inventory, logs, aiAnalyticsData, hasOrders, analyticsResource, inventoryResource, logsResource,
   } = useBranchData();
 
   const [insight, setInsight] = useState(null);
@@ -216,9 +218,26 @@ export default function DashboardPage() {
   const timeGreeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
   const dateLabel = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 
+  const operations = <section className="card card--pad operations" aria-label="Daily work">
+    <h2 className="card-title">Daily work</h2>
+    <p className="card-sub">Manage this branch’s menu, stock, and completed orders.</p>
+    <div className="workflow-toolbar">
+      {can(CAP.TOGGLE_AVAILABILITY) && <button className="btn btn--primary" onClick={() => navigate(`/menu/${branchId}`)}>Menu & availability</button>}
+      <button className="btn btn--secondary" onClick={() => navigate(`/inventory/${branchId}`)}>Inventory</button>
+      <button className="btn btn--secondary" onClick={() => navigate(`/orders/${branchId}`)}>Orders</button>
+    </div>
+    <ReadState resource={inventoryResource} label="inventory" />
+    {inventoryResource?.status === 'ready' && <div className="workflow-toolbar">
+      <button className="btn btn--ghost" onClick={() => navigate(`/inventory/${branchId}?status=critical`)}>{getInventoryHealth(inventory).critical.length} critical stock entries</button>
+      <button className="btn btn--ghost" onClick={() => navigate(`/inventory/${branchId}?status=warning`)}>{getInventoryHealth(inventory).warning.length} low stock entries</button>
+    </div>}
+  </section>;
+  if (analyticsResource?.status === 'error' || logsResource?.status === 'error') return <AppShell title="Dashboard">{operations}<ReadState resource={analyticsResource} label="dashboard" /><ReadState resource={logsResource} label="orders" /></AppShell>;
   if (!analyticsLoaded) {
     return (
       <AppShell title="Dashboard">
+        {operations}
+        <p role="status">Loading dashboard…</p>
         <div className="dash__kpis">
           {[0, 1, 2, 3].map((i) => <div key={i} className="skeleton" style={{ height: 148, borderRadius: 'var(--r-lg)' }} />)}
         </div>
@@ -237,6 +256,7 @@ export default function DashboardPage() {
 
   return (
     <AppShell title="Dashboard">
+      {operations}
       {/* ── Hero ── */}
       <div className="dash__hero rise">
         <div>
@@ -479,18 +499,18 @@ export default function DashboardPage() {
               {/* Alerts */}
               <div style={{ display: 'grid', gap: 8, marginTop: 'var(--sp-4)' }}>
                 {view.inventoryHealth.critical.slice(0, 3).map((item) => (
-                  <div className="alert-row" key={item.label}>
+                  <button className="alert-row" key={item.label} onClick={() => navigate(`/inventory/${branchId}?status=critical`)}>
                     <AlertTriangle size={15} style={{ color: 'var(--danger)', flexShrink: 0 }} />
                     <span style={{ flex: 1, color: 'var(--text-2)' }}>{item.label}</span>
                     <span className="pill pill--danger num">{item.stock} {item.unit}</span>
-                  </div>
+                  </button>
                 ))}
                 {view.inventoryHealth.warning.slice(0, 2).map((item) => (
-                  <div className="alert-row" key={item.label}>
+                  <button className="alert-row" key={item.label} onClick={() => navigate(`/inventory/${branchId}?status=warning`)}>
                     <PackageOpen size={15} style={{ color: 'var(--warning)', flexShrink: 0 }} />
                     <span style={{ flex: 1, color: 'var(--text-2)' }}>{item.label}</span>
                     <span className="pill pill--warning num">{item.stock} {item.unit}</span>
-                  </div>
+                  </button>
                 ))}
                 {view.inventoryHealth.tracked && view.inventoryHealth.critical.length === 0 && view.inventoryHealth.warning.length === 0 && (
                   <div className="alert-row">

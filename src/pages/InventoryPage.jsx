@@ -1,8 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   Boxes, Search, AlertTriangle, PackageCheck, PackageOpen, Gauge,
   Minus, Plus, History, TimerReset, TrendingDown,
 } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import ReadState from '../components/ui/ReadState';
 import AppShell from '../components/layout/AppShell';
 import Modal from '../components/ui/Modal';
 import ScoreRing from '../components/ui/ScoreRing';
@@ -44,6 +46,8 @@ function StockModal({ item, allSizes = [], branchId, onClose }) {
   const [critLevel, setCritLevel] = useState(Number(item.criticalLevel ?? 5));
   const [unit, setUnit] = useState(item.unit || 'units');
   const [saving, setSaving] = useState(false);
+  const saveLock = useRef(false);
+  const [historyError, setHistoryError] = useState('');
   const [error, setError] = useState('');
   const [history, setHistory] = useState(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -52,16 +56,19 @@ function StockModal({ item, allSizes = [], branchId, onClose }) {
   const delta = value - previous;
 
   async function loadHistory() {
+    setHistoryError('');
     try {
       const data = await getInventoryHistory(branchId, item.id);
       const rows = Object.values(data || {}).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).slice(0, 30);
       setHistory(rows);
     } catch {
-      setHistory([]);
+      setHistoryError('Could not load adjustment history. Try again.');
     }
   }
 
   async function save() {
+    if (saveLock.current) return;
+    saveLock.current = true;
     setSaving(true);
     setError('');
     try {
@@ -92,6 +99,7 @@ function StockModal({ item, allSizes = [], branchId, onClose }) {
     } catch (e) {
       setError(e.message || 'Failed to save changes.');
     } finally {
+      saveLock.current = false;
       setSaving(false);
     }
   }
@@ -99,12 +107,12 @@ function StockModal({ item, allSizes = [], branchId, onClose }) {
   return (
     <Modal
       open
-      onClose={onClose}
+      onClose={() => { if (!saving) onClose(); }}
       title={item.productName}
       subtitle={`${item._category}${item._sizeName && item._sizeName !== 'Medium' ? ` · ${item._sizeName}` : ''}`}
       footer={
         <>
-          <button className="btn btn--ghost" onClick={onClose}>Cancel</button>
+          <button className="btn btn--ghost" onClick={onClose} disabled={saving}>Cancel</button>
           <button className="btn btn--primary" onClick={save} disabled={saving}>
             {saving ? <span className="spinner" style={{ borderTopColor: '#fff', borderColor: 'rgba(255,255,255,0.3)' }} /> : 'Save changes'}
           </button>
@@ -113,7 +121,12 @@ function StockModal({ item, allSizes = [], branchId, onClose }) {
     >
       {error && <div className="login__error" role="alert" style={{ marginBottom: 'var(--sp-4)' }}>{error}</div>}
 
-      <div style={{ display: 'grid', gap: 'var(--sp-5)' }}>
+      <fieldset disabled={saving} className="workflow-fields" style={{ display: 'grid', gap: 'var(--sp-5)' }}>
+        <div className="stock-preview" role="status">
+          <span>Current <strong>{previous} {unit}</strong></span>
+          <span>Change <strong>{delta > 0 ? '+' : ''}{delta}</strong></span>
+          <span>After saving <strong>{value} {unit}</strong></span>
+        </div>
         <div>
           <label className="field-label" style={{ textAlign: 'center', display: 'block' }}>Stock level</label>
           <div className="inv__stepper">
@@ -150,7 +163,7 @@ function StockModal({ item, allSizes = [], branchId, onClose }) {
             </div>
             {siblings.map((s) => (
               <div className="inv__sizeRow" key={s.id}>
-                <span className="inv__sizeName">{s._sizeName || 'Medium'}</span>
+                <span className="inv__sizeName">{s._sizeName || 'Medium'}<small>Current {Number(s.stock ?? 0)} · Change {Number(siblingStocks[s.id] ?? 0) - Number(s.stock ?? 0)} · After {siblingStocks[s.id] ?? 0}</small></span>
                 <input
                   className="input num"
                   style={{ minHeight: 38, width: 110, textAlign: 'center' }}
@@ -179,16 +192,16 @@ function StockModal({ item, allSizes = [], branchId, onClose }) {
             {showAdvanced && (
               <div style={{ display: 'grid', gap: 'var(--sp-3)', gridTemplateColumns: '1fr 1fr 1fr' }}>
                 <div>
-                  <label className="field-label">Warn at</label>
-                  <input className="input num" type="number" min="0" value={warnLevel} onChange={(e) => setWarnLevel(Number(e.target.value) || 0)} />
+                  <label className="field-label" htmlFor="stock-warn">Warn at</label>
+                  <input className="input num" type="number" min="0" id="stock-warn" value={warnLevel} onChange={(e) => setWarnLevel(Number(e.target.value) || 0)} />
                 </div>
                 <div>
-                  <label className="field-label">Critical at</label>
-                  <input className="input num" type="number" min="0" value={critLevel} onChange={(e) => setCritLevel(Number(e.target.value) || 0)} />
+                  <label className="field-label" htmlFor="stock-critical">Critical at</label>
+                  <input className="input num" type="number" min="0" id="stock-critical" value={critLevel} onChange={(e) => setCritLevel(Number(e.target.value) || 0)} />
                 </div>
                 <div>
-                  <label className="field-label">Unit</label>
-                  <input className="input" value={unit} onChange={(e) => setUnit(e.target.value)} />
+                  <label className="field-label" htmlFor="stock-unit">Unit</label>
+                  <input className="input" id="stock-unit" value={unit} onChange={(e) => setUnit(e.target.value)} />
                 </div>
               </div>
             )}
@@ -196,6 +209,7 @@ function StockModal({ item, allSizes = [], branchId, onClose }) {
         )}
 
         <div>
+          {historyError && <p role="alert">{historyError}</p>}
           {history === null ? (
             <button className="btn btn--secondary btn--sm" onClick={loadHistory}>
               <History size={14} /> View adjustment history
@@ -218,15 +232,18 @@ function StockModal({ item, allSizes = [], branchId, onClose }) {
             </div>
           )}
         </div>
-      </div>
+      </fieldset>
     </Modal>
   );
 }
 
 export default function InventoryPage() {
-  const { branchId, inventory, inventoryLoaded, analytics } = useBranchData();
+  const { branchId, inventory, inventoryLoaded, analytics, inventoryResource } = useBranchData();
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [params, setParams] = useSearchParams();
+  const requestedStatus = params.get('status');
+  const statusFilter = ['critical', 'warning', 'healthy'].includes(requestedStatus) ? requestedStatus : 'all';
+  const setStatusFilter = (status) => setParams(status === 'all' ? {} : { status }, { replace: true });
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [sortBy, setSortBy] = useState('status');
   const [selected, setSelected] = useState(null);
@@ -272,10 +289,12 @@ export default function InventoryPage() {
       });
   }, [items, search, statusFilter, categoryFilter, sortBy]);
 
+  const clearFilters = () => { setSearch(''); setCategoryFilter('all'); setStatusFilter('all'); setSortBy('status'); };
+  if (inventoryResource?.status === 'error') return <AppShell title="Inventory"><ReadState resource={inventoryResource} label="inventory" /></AppShell>;
   if (!inventoryLoaded) {
     return (
       <AppShell title="Inventory">
-        <div className="inv__summary">
+        <div className="inv__summary" role="status" aria-label="Loading inventory">
           {[0, 1, 2, 3].map((i) => <div key={i} className="skeleton" style={{ height: 84, borderRadius: 'var(--r-lg)' }} />)}
         </div>
         <div className="inv__grid">
@@ -302,27 +321,27 @@ export default function InventoryPage() {
             <div className="inv__summaryLabel">Inventory health</div>
           </div>
         </div>
-        <div className="card inv__summaryCard rise-2">
+        <button className="card inv__summaryCard rise-2" aria-pressed={statusFilter === 'critical'} onClick={() => { setSearch(''); setCategoryFilter('all'); setStatusFilter('critical'); }}>
           <span className="inv__summaryIcon" style={{ background: 'var(--danger-soft)', color: 'var(--danger)' }}><AlertTriangle size={20} /></span>
           <div>
             <div className="inv__summaryValue num">{counts.critical}</div>
             <div className="inv__summaryLabel">Critical items</div>
           </div>
-        </div>
-        <div className="card inv__summaryCard rise-3">
+        </button>
+        <button className="card inv__summaryCard rise-3" aria-pressed={statusFilter === 'warning'} onClick={() => { setSearch(''); setCategoryFilter('all'); setStatusFilter('warning'); }}>
           <span className="inv__summaryIcon" style={{ background: 'var(--warning-soft)', color: 'var(--warning)' }}><PackageOpen size={20} /></span>
           <div>
             <div className="inv__summaryValue num">{counts.warning}</div>
             <div className="inv__summaryLabel">Low stock</div>
           </div>
-        </div>
-        <div className="card inv__summaryCard rise-4">
+        </button>
+        <button className="card inv__summaryCard rise-4" aria-pressed={statusFilter === 'healthy'} onClick={() => { setSearch(''); setCategoryFilter('all'); setStatusFilter('healthy'); }}>
           <span className="inv__summaryIcon" style={{ background: 'var(--success-soft)', color: 'var(--success)' }}><PackageCheck size={20} /></span>
           <div>
             <div className="inv__summaryValue num">{counts.healthy}</div>
             <div className="inv__summaryLabel">Healthy</div>
           </div>
-        </div>
+        </button>
       </div>
 
       {/* ── Shortage forecast ── */}
@@ -354,7 +373,7 @@ export default function InventoryPage() {
         </div>
         <div className="seg">
           {['all', 'critical', 'warning', 'healthy'].map((s) => (
-            <button key={s} className={`seg__btn ${statusFilter === s ? 'is-active' : ''}`} onClick={() => setStatusFilter(s)}>
+            <button key={s} className={`seg__btn ${statusFilter === s ? 'is-active' : ''}`} onClick={() => setStatusFilter(s)} aria-pressed={statusFilter === s}>
               {s === 'all' ? `All (${items.length})` : `${STATUS_META[s].label} (${counts[s]})`}
             </button>
           ))}
@@ -370,11 +389,13 @@ export default function InventoryPage() {
         </select>
       </div>
 
+      {(search || statusFilter !== 'all' || categoryFilter !== 'all') && <button className="btn btn--secondary" onClick={clearFilters}>Clear filters</button>}
+      <p className="workflow-count" role="status">{filtered.length} of {items.length} stock entries</p>
       {/* ── Items ── */}
       {filtered.length === 0 ? (
         <div className="empty">
           <span className="empty__icon"><Boxes size={24} /></span>
-          <div className="empty__title">No items match</div>
+          <div className="empty__title">{items.length === 0 ? 'No inventory yet' : 'No items match'}</div>
           <p>{items.length === 0 ? 'Inventory syncs automatically from your menu items.' : 'Try clearing the search or filters.'}</p>
         </div>
       ) : (
@@ -392,13 +413,13 @@ export default function InventoryPage() {
                 className={`card card--hover inv-item rise-${Math.min(6, (idx % 6) + 1)}`}
                 style={{ textAlign: 'left', cursor: 'pointer', border: item.status === 'critical' ? '1px solid var(--danger)' : undefined }}
                 onClick={() => setSelected(item)}
-                aria-label={`Adjust stock for ${item.productName}`}
+                aria-label={`Adjust stock for ${item.productName} ${item._sizeName || 'Medium'}`}
               >
                 <div className="inv-item__head">
                   <div>
                     <div className="inv-item__name">{item.productName}</div>
                     <div className="inv-item__meta">
-                      {item._category}{item._sizeName && item._sizeName !== 'Medium' ? ` · ${item._sizeName}` : ''}
+                      {item._category} · {item._sizeName || 'Medium'}
                     </div>
                   </div>
                   <span className={`pill ${meta.pill}`}><span className="pill-dot" />{meta.label}</span>

@@ -434,17 +434,17 @@ function parseLogsSnapshot(snapshot) {
 }
 
 // Subscribe to real-time logs updates. Returns an unsubscribe function.
-export function onLogsChange(branchId, callback) {
+export function onLogsChange(branchId, callback, onError) {
   const logsRef = ref(database, `${branchDataPath(branchId)}/logs`);
   const handler = (snapshot) => {
     callback(parseLogsSnapshot(snapshot));
   };
-  onValue(logsRef, handler);
+  onValue(logsRef, handler, onError);
   return () => off(logsRef, 'value', handler);
 }
 
 // Subscribe to real-time categories + items updates. Returns an unsubscribe function.
-export function onCategoriesChange(branchId, callback) {
+export function onCategoriesChange(branchId, callback, onError) {
   const catRef = ref(database, `${branchDataPath(branchId)}/categories`);
   const handler = (snapshot) => {
     const data = snapshot.val();
@@ -470,17 +470,17 @@ export function onCategoriesChange(branchId, callback) {
     }
     callback(categoryNames, categoryItems);
   };
-  onValue(catRef, handler);
+  onValue(catRef, handler, onError);
   return () => off(catRef, 'value', handler);
 }
 
 // Subscribe to real-time deletedLogs updates. Returns an unsubscribe function.
-export function onDeletedLogsChange(branchId, callback) {
+export function onDeletedLogsChange(branchId, callback, onError) {
   const deletedRef = ref(database, `${branchDataPath(branchId)}/deletedLogs`);
   const handler = (snapshot) => {
     callback(parseLogsSnapshot(snapshot));
   };
-  onValue(deletedRef, handler);
+  onValue(deletedRef, handler, onError);
   return () => off(deletedRef, 'value', handler);
 }
 
@@ -551,7 +551,7 @@ export async function addMenuLog(branchId, action) {
 }
 
 // Real-time listener for menu audit logs. Returns unsubscribe function.
-export function onMenuLogsChange(branchId, callback) {
+export function onMenuLogsChange(branchId, callback, onError) {
   const logsRef = ref(database, `${branchDataPath(branchId)}/menuLogs`);
   const handler = (snapshot) => {
     const data = snapshot.val();
@@ -561,6 +561,6 @@ export function onMenuLogsChange(branchId, callback) {
       .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
     callback(entries);
   };
-  onValue(logsRef, handler);
+  onValue(logsRef, handler, onError);
   return () => off(logsRef, 'value', handler);
 }

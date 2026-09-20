@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useMemo } from 'react';
 import { useAnalyticsProcessor } from '../hooks/useAnalyticsProcessor';
 import { useInventoryProcessor } from '../hooks/useInventoryProcessor';
 import { formatDateKey, formatWeekKey, formatMonthKey, onAnalyticsChange, onAnalyticsExclusionsChange, applyExclusions } from '../lib/analyticsApi';
@@ -6,9 +6,12 @@ import { onMenuAndInventoryChange } from '../lib/inventoryApi';
 import { onLogsChange, onDeletedLogsChange } from '../lib/menuApi';
 import { detectPatterns } from '../lib/patternInsights';
 import { setBranchContext } from '../lib/firebase';
+import { useLiveResource } from '../hooks/useLiveResource';
 import { useAuth } from './AuthContext';
 
 const BranchDataContext = createContext(null);
+const EMPTY_OBJECT = {};
+const EMPTY_LIST = [];
 
 /**
  * Single source of truth for a branch's live data.
@@ -22,56 +25,21 @@ const BranchDataContext = createContext(null);
 export function BranchDataProvider({ branchId, children }) {
   const { workspace } = useAuth();
   if (branchId && workspace?.companyId) setBranchContext(branchId, workspace.companyId);
-  const [analytics, setAnalytics] = useState(null);
-  const [inventory, setInventory] = useState({});
-  const [inventoryLoaded, setInventoryLoaded] = useState(false);
-  const [logs, setLogs] = useState([]);
-  const [logsLoaded, setLogsLoaded] = useState(false);
-  const [deletedLogs, setDeletedLogs] = useState([]);
-  const [exclusions, setExclusions] = useState({});
+  const analyticsResource = useLiveResource(onAnalyticsChange, branchId, null);
+  const inventoryResource = useLiveResource(onMenuAndInventoryChange, branchId, EMPTY_OBJECT);
+  const logsResource = useLiveResource(onLogsChange, branchId, EMPTY_LIST);
+  const trashResource = useLiveResource(onDeletedLogsChange, branchId, EMPTY_LIST);
+  const exclusionsResource = useLiveResource(onAnalyticsExclusionsChange, branchId, EMPTY_OBJECT);
+  const analytics = analyticsResource.data;
+  const inventory = inventoryResource.data;
+  const logs = logsResource.data;
+  const deletedLogs = trashResource.data;
+  const exclusions = exclusionsResource.data;
+  const inventoryLoaded = inventoryResource.status === 'ready';
+  const logsLoaded = logsResource.status === 'ready';
 
-  // Business-logic processors (identical to V1)
   useAnalyticsProcessor(branchId, true);
   useInventoryProcessor(branchId, true);
-
-  useEffect(() => {
-    if (!branchId) return undefined;
-    setAnalytics(null);
-    return onAnalyticsChange(branchId, setAnalytics);
-  }, [branchId, workspace?.companyId]);
-
-  useEffect(() => {
-    if (!branchId) return undefined;
-    setInventoryLoaded(false);
-    return onMenuAndInventoryChange(branchId, (data) => {
-      setInventory(data);
-      setInventoryLoaded(true);
-    });
-  }, [branchId]);
-
-  useEffect(() => {
-    if (!branchId) return undefined;
-    setLogsLoaded(false);
-    return onLogsChange(branchId, (data) => {
-      setLogs(data);
-      setLogsLoaded(true);
-    });
-  }, [branchId]);
-
-  useEffect(() => {
-    if (!branchId) return undefined;
-    return onDeletedLogsChange(branchId, setDeletedLogs);
-  }, [branchId]);
-
-  // Which orders are being left out of the roll-up. Held beside the orders and
-  // folded in below, so a screen reading `logs` sees the same picture the
-  // analytics rebuild used. Without this the ledger would show an excluded order
-  // as counted, and the button meant to restore it would offer to exclude it.
-  useEffect(() => {
-    if (!branchId) return undefined;
-    setExclusions({});
-    return onAnalyticsExclusionsChange(branchId, setExclusions);
-  }, [branchId]);
 
   const logsWithExclusions = useMemo(() => applyExclusions(logs, exclusions), [logs, exclusions]);
   const deletedLogsWithExclusions = useMemo(
@@ -115,6 +83,7 @@ export function BranchDataProvider({ branchId, children }) {
 
   const value = useMemo(() => ({
     branchId,
+    analyticsResource, inventoryResource, logsResource, trashResource, exclusionsResource,
     analytics,
     analyticsLoaded: analytics !== null,
     inventory,
@@ -125,7 +94,7 @@ export function BranchDataProvider({ branchId, children }) {
     currentKeys,
     aiAnalyticsData,
     hasOrders: Number(analytics?.summary?.totalOrders || 0) > 0,
-  }), [branchId, analytics, inventory, inventoryLoaded, logsWithExclusions, logsLoaded, deletedLogsWithExclusions, currentKeys, aiAnalyticsData]);
+  }), [analyticsResource, inventoryResource, logsResource, trashResource, exclusionsResource, branchId, analytics, inventory, inventoryLoaded, logsWithExclusions, logsLoaded, deletedLogsWithExclusions, currentKeys, aiAnalyticsData]);
 
   return <BranchDataContext.Provider value={value}>{children}</BranchDataContext.Provider>;
 }

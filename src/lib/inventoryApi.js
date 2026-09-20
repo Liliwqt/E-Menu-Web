@@ -239,7 +239,7 @@ export function extractMenuItems(categoriesData) {
  *
  * Callback receives: { [itemId]: { productName, stock, category, ...inventoryFields } }
  */
-export function onMenuAndInventoryChange(branchId, callback) {
+export function onMenuAndInventoryChange(branchId, callback, onError) {
   const catRef = ref(database, `${branchDataPath(branchId)}/categories`);
   const invRef = ref(database, `${branchDataPath(branchId)}/inventory`);
 
@@ -296,8 +296,8 @@ export function onMenuAndInventoryChange(branchId, callback) {
     merge();
   };
 
-  onValue(catRef, catHandler);
-  onValue(invRef, invHandler);
+  onValue(catRef, catHandler, onError);
+  onValue(invRef, invHandler, onError);
 
   return () => {
     off(catRef, 'value', catHandler);

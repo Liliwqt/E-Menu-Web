@@ -525,10 +525,10 @@ export async function includeOrderInAnalytics(branchId, orderId) {
  * Members need this to apply the same flags the rebuild uses, since every
  * dashboard reads the one analytics document.
  */
-export function onAnalyticsExclusionsChange(branchId, callback) {
+export function onAnalyticsExclusionsChange(branchId, callback, onError) {
   const exclusionsRef = ref(database, exclusionsPath(branchId));
   const handler = (snapshot) => callback(snapshot.val() || {});
-  onValue(exclusionsRef, handler);
+  onValue(exclusionsRef, handler, onError);
   return () => off(exclusionsRef, 'value', handler);
 }
 
@@ -569,11 +569,11 @@ export async function getAnalyticsSummary(branchId) {
  * Real-time listener for the full analytics document.
  * Prefer this on dashboard screens to avoid many parallel Firebase reads/listeners.
  */
-export function onAnalyticsChange(branchId, callback) {
+export function onAnalyticsChange(branchId, callback, onError) {
   const analyticsRef = ref(database, analyticsPath(branchId));
   const handler = (snapshot) => {
     callback(normalizeAnalytics(snapshot.val()));
   };
-  onValue(analyticsRef, handler);
+  onValue(analyticsRef, handler, onError);
   return () => off(analyticsRef, 'value', handler);
 }

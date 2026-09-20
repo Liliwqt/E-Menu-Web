@@ -136,12 +136,12 @@ function SetupRoute() {
 
 /** Provides shared live branch data to every page below a /:branchId route. */
 function BranchScope({ children }) {
-  const { workspace } = useAuth();
+  const { workspace, user } = useAuth();
   const { branchId: branchRef } = useParams();
   // Every consumer of this provider — the shell, its nav paths, the kiosk bridge,
   // the processors and the pages — needs the real id, not the readable form.
   const branchId = resolveBranchRef(workspace, branchRef);
-  return <BranchDataProvider branchId={branchId}>{children}</BranchDataProvider>;
+  return <BranchDataProvider key={`${user?.uid}:${workspace?.companyId}:${branchId}`} branchId={branchId}>{children}</BranchDataProvider>;
 }
 
 /**
@@ -189,7 +189,7 @@ export default function App() {
         <Route path="/analytics/:branchId" element={branchRoute(AnalyticsPage, CAP.VIEW_ANALYTICS)} />
         <Route path="/inventory/:branchId" element={branchRoute(InventoryPage)} />
         <Route path="/orders/:branchId" element={branchRoute(OrdersPage)} />
-        <Route path="/menu/:branchId" element={branchRoute(MenuPage, CAP.MANAGE_MENU)} />
+        <Route path="/menu/:branchId" element={branchRoute(MenuPage, CAP.TOGGLE_AVAILABILITY)} />
         <Route path="/reports/:branchId" element={branchRoute(ReportsPage, CAP.EXPORT_REPORTS)} />
         {/* Matches the nav entry: the ledger is where corrections happen, and the
             nav already withholds it from staff. Opening it read-only to staff is a

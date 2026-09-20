@@ -1,9 +1,10 @@
+import '../../styles/workflows.css';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, TrendingUp, Boxes, ReceiptText, UtensilsCrossed,
   FileBarChart, History, Sun, Moon, LogOut, Sparkles, Settings2, Coffee, HelpCircle,
-  Monitor, CreditCard, MoreHorizontal, X, Users,
+  Monitor, CreditCard, MoreHorizontal, Users,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -17,6 +18,7 @@ import SettingsModal from './SettingsModal';
 import KioskRegisterDialog from './KioskRegisterDialog';
 import AINotificationPanel from '../ai/AINotificationPanel';
 import HelpCenter from '../help/HelpCenter';
+import Modal from '../ui/Modal';
 import BranchSwitcher from './BranchSwitcher';
 
 const AIAnalystDrawer = lazy(() => import('../ai/AIAnalystDrawer'));
@@ -24,7 +26,7 @@ const AIAnalystDrawer = lazy(() => import('../ai/AIAnalystDrawer'));
 const NAV = [
   { key: 'home', label: 'Dashboard', icon: LayoutDashboard, path: (b) => `/home/${b}` },
   { key: 'orders', label: 'Orders', icon: ReceiptText, path: (b) => `/orders/${b}` },
-  { key: 'menu', label: 'Menu', icon: UtensilsCrossed, path: (b) => `/menu/${b}`, cap: CAP.MANAGE_MENU },
+  { key: 'menu', label: 'Menu', icon: UtensilsCrossed, path: (b) => `/menu/${b}`, cap: CAP.TOGGLE_AVAILABILITY },
   { key: 'inventory', label: 'Inventory', icon: Boxes, path: (b) => `/inventory/${b}` },
 ];
 
@@ -147,7 +149,7 @@ export default function AppShell({ children, title }) {
         <BranchSwitcher branchId={branchId} />
 
         <nav className="shell__nav" aria-label="Primary">
-          <div className="shell__navLabel">Overview</div>
+          <div className="shell__navLabel">Daily work</div>
           {navPrimary.map((item) => (
             <button
               key={item.key}
@@ -161,7 +163,7 @@ export default function AppShell({ children, title }) {
           ))}
           {navInsights.length > 0 && (
             <>
-              <div className="shell__navLabel">Insights</div>
+              <div className="shell__navLabel">Reports & insights</div>
               {navInsights.map((item) => (
                 <button
                   key={item.key}
@@ -177,7 +179,7 @@ export default function AppShell({ children, title }) {
           )}
           {navSettings.length > 0 && (
             <>
-              <div className="shell__navLabel">Settings</div>
+              <div className="shell__navLabel">Administration</div>
               {navSettings.map((item) => (
                 <button
                   key={item.key}
@@ -319,21 +321,10 @@ export default function AppShell({ children, title }) {
         ))}
       </nav>
 
-      {moreOpen && (
-        <div
-          className="shell__moreSheet"
-          onClick={(e) => { if (e.target === e.currentTarget) setMoreOpen(false); }}
-        >
-          <div className="shell__morePanel" role="dialog" aria-label="More navigation">
-            <div className="shell__moreHeader">
-              <h3 style={{ fontSize: 'var(--text-lg)' }}>More</h3>
-              <button className="btn btn--ghost btn--icon btn--sm" onClick={() => setMoreOpen(false)} aria-label="Close menu">
-                <X size={18} />
-              </button>
-            </div>
+      <Modal open={moreOpen} onClose={() => setMoreOpen(false)} title="More navigation">
             {navInsights.length > 0 && (
               <>
-                <div className="shell__navLabel">Insights</div>
+                <div className="shell__navLabel">Reports & insights</div>
                 {navInsights.map((item) => (
                   <button
                     key={item.key}
@@ -348,7 +339,7 @@ export default function AppShell({ children, title }) {
             )}
             {navSettings.length > 0 && (
               <>
-                <div className="shell__navLabel">Settings</div>
+                <div className="shell__navLabel">Administration</div>
                 {navSettings.map((item) => (
                   <button
                     key={item.key}
@@ -367,9 +358,7 @@ export default function AppShell({ children, title }) {
                 AI Analyst
               </button>
             )}
-          </div>
-        </div>
-      )}
+      </Modal>
 
       {aiEnabled && aiOpen && (
         <Suspense fallback={null}>
