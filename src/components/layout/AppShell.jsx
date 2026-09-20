@@ -203,15 +203,6 @@ export default function AppShell({ children, title }) {
         </nav>
 
         <div className="shell__footer">
-          {/* Same control as the mobile header: a ghost icon-only button. */}
-          <button
-            className="btn btn--ghost btn--icon btn--sm"
-            onClick={toggleTheme}
-            aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
-            title={theme === 'light' ? 'Dark mode' : 'Light mode'}
-          >
-            {theme === 'light' ? <Moon size={17} /> : <Sun size={17} />}
-          </button>
           <button className="shell__user" onClick={() => setSettingsOpen(true)} title="Account settings">
             <div className="shell__avatar">{initials}</div>
             <div style={{ minWidth: 0, flex: 1 }}>
@@ -241,6 +232,16 @@ export default function AppShell({ children, title }) {
           <div className="shell__topActions">
             <button className="btn btn--ghost btn--icon" onClick={() => setHelpOpen(true)} aria-label="Help Center" title="Help Center">
               <HelpCircle size={18} />
+            </button>
+            {/* Theme toggle sits in the header, matching the mobile header, rather
+                than in the sidebar footer. */}
+            <button
+              className="btn btn--ghost btn--icon"
+              onClick={toggleTheme}
+              aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+              title={theme === 'light' ? 'Dark mode' : 'Light mode'}
+            >
+              {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
             </button>
             {embeddedInApp && (
               <button
