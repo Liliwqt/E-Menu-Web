@@ -309,7 +309,32 @@ img { max-width: 100%; display: block; }
 .rise-5 { animation-delay: 240ms; }
 .rise-6 { animation-delay: 290ms; }
 
-.page-enter { animation: riseIn var(--dur-slow) var(--ease-out) backwards; }
+.page-enter { animation: pageSlideIn var(--dur-med) var(--ease-out) backwards; }
+
+/* Panel/content entrance — slide ONLY, never opacity.
+ *
+ * `<main className="shell__content page-enter">` is keyed by location.pathname, so it
+ * remounts on every navigation and this animation restarts each time. It used to be
+ * `riseIn`, which begins at `opacity: 0`, so the content area was fully transparent for
+ * the first frames of every panel switch. The loading skeleton rendered correctly
+ * throughout — but invisibly, and what the reader saw was `var(--bg)` showing through.
+ * Measured on the device: 4 skeleton blocks present while the computed opacity was 0,
+ * taking ~430ms to reach 1. That is the grey flash.
+ *
+ * It is worse than a single flash because the branch segment in the URL is resolved
+ * (name -> id) as a second navigation, so the animation restarts and the flash repeats.
+ *
+ * Fading in from transparent cannot be made safe here: the moment a page's chunk
+ * resolves, Suspense swaps the skeleton out for the content, so any opacity below 1
+ * leaves the area showing the page background. Slide only, so whatever is in the
+ * content area — skeleton or page — is opaque from the first frame.
+ *
+ * Opacity is deliberately absent rather than raised to 0.9 or similar.
+ */
+@keyframes pageSlideIn {
+  from { transform: translateY(8px); }
+  to { transform: translateY(0); }
+}
 
 /* Chart entrance motion (disabled automatically via prefers-reduced-motion) */
 @keyframes chartGrowY {
