@@ -12,6 +12,8 @@ import { useBranchData } from '../../context/BranchDataContext';
 import { useLiveAnalyst } from '../../context/LiveAnalystProvider';
 import { branchLabel } from '../../lib/branchLabel';
 import { useAiAccess } from '../../hooks/useAiAccess';
+import { useSubscription } from '../../context/SubscriptionContext';
+import { canUseAiMode } from '../../lib/planFeatures';
 import { isEmbeddedInApp, enterMenuMode, getDeviceUid } from '../../lib/deviceBridge';
 import { CAP } from '../../lib/permissions';
 import SettingsModal from './SettingsModal';
@@ -78,6 +80,7 @@ export default function AppShell({ children, title }) {
   const [moreOpen, setMoreOpen] = useState(false);
   // Role and plan together. isAiEnabled() alone is only the plan half.
   const aiEnabled = useAiAccess();
+  const { billing } = useSubscription();
 
   // Feed branch data to the LiveAnalystProvider (which sits above the router)
   // so it can generate AI analyses with current branch analytics.
@@ -90,12 +93,13 @@ export default function AppShell({ children, title }) {
   useEffect(() => {
     if (!aiEnabled) return undefined;
     const handler = (e) => {
+      if (e.detail?.mode && !canUseAiMode(billing, e.detail.mode)) return;
       setAiAction(e.detail || null);
       setAiOpen(true);
     };
     window.addEventListener('emp:open-ai', handler);
     return () => window.removeEventListener('emp:open-ai', handler);
-  }, [aiEnabled]);
+  }, [aiEnabled, billing]);
 
   const activeKey = activeKeyFor(location.pathname);
   const branchName = branchLabel({ workspace, branchId });

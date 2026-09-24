@@ -1,6 +1,6 @@
 import { useSubscription } from '../context/SubscriptionContext';
 import { useAuth } from '../context/AuthContext';
-import { isAiEnabled } from '../lib/workspaceApi';
+import { canUseAiMode, isAiEnabled } from '../lib/planFeatures';
 import { aiAccessDenial, canUseAi } from '../lib/aiAccess';
 import { CAP } from '../lib/permissions';
 
@@ -37,4 +37,11 @@ export function useAiAccess() {
  */
 export function useAiDenial() {
   return resolveAiAccess().deniedBy;
+}
+
+
+export function useAiModeAccess(mode) {
+  const { can } = useAuth();
+  const { billing } = useSubscription();
+  return can(CAP.USE_AI) && canUseAiMode(billing, mode);
 }

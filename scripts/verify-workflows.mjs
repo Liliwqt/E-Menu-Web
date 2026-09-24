@@ -23,7 +23,7 @@ const users = Object.fromEntries(roles.map(role => [role, { uid: role, role, com
 const membership = Object.fromEntries(roles.map(role => [role, { uid: role, role }]));
 function fixture(id, name) {
   return {
-    branchProfile: { branchId: id, branchName: name, companyId: company, ownerUid: 'owner', managerUid: 'manager', plan: 'free', subscriptionStatus: 'inactive' },
+    branchProfile: { branchId: id, branchName: name, companyId: company, ownerUid: 'owner', managerUid: 'manager' },
     users: membership,
     categories: { Drinks: { coffee: { name: 'Coffee', price: 100, available: true }, tea: { name: 'Tea', price: 80, available: false, manualUnavailable: true } } },
     inventory: { Drinks: { coffee: { sizes: { Medium: { stock: 18, currentStock: 18 } } }, tea: { sizes: { Medium: { stock: 3, currentStock: 3 } } } } },
@@ -37,7 +37,7 @@ assert.ok(rulesResponse.ok, 'Install current rules in isolated namespace');
 const secondFixture = fixture(second, 'Second');
 secondFixture.categories = {Food:{toast:{name:'Toast',price:50,available:true}}};
 secondFixture.inventory = {Food:{toast:{sizes:{Medium:{stock:20}}}}};
-await api('', 'PUT', {[company]:{
+await api('', 'PUT', {billingEntitlements:{[company]:{[branch]:{companyId:company,branchId:branch,ownerUid:'owner',plan:'basic',subscriptionStatus:'active',periodStartAt:Date.now(),periodEndAt:Date.now()+86400000},[second]:{companyId:company,branchId:second,ownerUid:'owner',plan:'basic',subscriptionStatus:'active',periodStartAt:Date.now(),periodEndAt:Date.now()+86400000}}},[company]:{
  companyProfile:{companyId:company,companyName:'UX Cafe',ownerUids:{owner:true}},
  users, branches:{[branch]:fixture(branch,'Main'),[second]:secondFixture},
 }});

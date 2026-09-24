@@ -8,7 +8,6 @@ budget, ledger), and the OpenAI-shaped response the dashboard already parses is 
 from __future__ import annotations
 
 import json
-from datetime import date
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -24,29 +23,16 @@ router = APIRouter(prefix="/api/ai", tags=["ai"])
 ALLOWED_MODELS = {"gpt-4o-mini", "gpt-4o", "gpt-4.1-mini"}
 MAX_OUTPUT_TOKENS = 3000
 
-# Per-user daily request quota: deterministic fairness/abuse guard so one runaway client can
-# never drain the shared budget. Sized far above legitimate use (a busy cafe makes ~20-30 AI
-# calls/day after client-side caching). In-memory: resets at UTC midnight and on redeploy.
-DAILY_REQUEST_LIMIT = 300
-_daily_usage: dict[str, tuple[str, int]] = {}
-
-
-def _enforce_daily_quota(uid: str) -> None:
-    today = date.today().isoformat()
-    day, count = _daily_usage.get(uid, (today, 0))
-    if day != today:
-        count = 0
-    if count >= DAILY_REQUEST_LIMIT:
-        raise HTTPException(status_code=429, detail="Daily AI request limit reached; try again tomorrow")
-    _daily_usage[uid] = (today, count + 1)
-
-
 class ChatMessage(BaseModel):
     role: str
     content: str
 
 
 class ChatCompletionRequest(BaseModel):
+    companyId: str
+    branchId: str
+    mode: str
+    requestId: str
     model: str = "gpt-4o-mini"
     messages: list[ChatMessage] = Field(min_length=1)
     response_format: dict[str, Any] | None = None
@@ -59,6 +45,13 @@ def get_gateway(request: Request) -> LLMGateway:
     if gateway is None:
         raise HTTPException(status_code=503, detail="AI backend is not configured")
     return gateway
+
+
+def get_entitlements(request: Request):
+    service = getattr(request.app.state, "entitlement_service", None)
+    if service is None:
+        raise HTTPException(status_code=503, detail="Billing authorization is not configured")
+    return service
 
 
 def get_verifier(request: Request) -> IdentityVerifier:
@@ -84,12 +77,26 @@ async def chat_completions(
     body: ChatCompletionRequest,
     identity: VerifiedIdentity = Depends(require_identity),
     gateway: LLMGateway = Depends(get_gateway),
+    entitlements = Depends(get_entitlements),
 ) -> dict[str, Any]:
-    _enforce_daily_quota(identity.uid)
-
+    grant = entitlements.reserve(uid=identity.uid, company=body.companyId,
+                                 branch=body.branchId, mode=body.mode, request_id=body.requestId)
     system_prompt = next((m.content for m in body.messages if m.role == "system"), "")
+    if grant.plan == "starter":
+        system_prompt = ("Starter tier: discuss recorded revenue, order trends, potential revenue gaps, "
+                         "and general business suggestions only. Do not present inventory, staffing, "
+                         "simulations, live shift analysis, or executive presentations as included. "
+                         + system_prompt)
+    try:
+        memory = entitlements.context(grant)
+    except Exception as exc:
+        entitlements.refund(grant, body.requestId)
+        raise HTTPException(status_code=503, detail="Branch insights are temporarily unavailable") from exc
+    if memory:
+        system_prompt += "\nPrior dated branch insights (summaries only): " + json.dumps(memory)
     user_prompt = next((m.content for m in body.messages if m.role == "user"), "")
     if not user_prompt:
+        entitlements.refund(grant, body.requestId)
         raise HTTPException(status_code=400, detail="a user message is required")
 
     model = body.model if body.model in ALLOWED_MODELS else "gpt-4o-mini"
@@ -100,9 +107,19 @@ async def chat_completions(
             max_output_tokens=min(int(body.max_tokens), MAX_OUTPUT_TOKENS), temperature=body.temperature,
         )
     except BudgetExceeded as exc:
+        entitlements.refund(grant, body.requestId)
         raise HTTPException(status_code=429, detail="AI daily budget reached; please try later") from exc
     except LLMUnavailable as exc:
+        entitlements.refund(grant, body.requestId)
         raise HTTPException(status_code=503, detail="AI temporarily unavailable") from exc
+    except Exception as exc:
+        entitlements.refund(grant, body.requestId)
+        raise HTTPException(status_code=503, detail="AI generation failed; please try again") from exc
+    try:
+        entitlements.remember(grant, mode=body.mode, content=content, request_id=body.requestId)
+    except Exception:
+        # A memory write must never turn a completed model call into an apparent failure.
+        pass
 
     # Return the OpenAI chat-completions shape the dashboard already parses (choices[0].message.content).
     return {

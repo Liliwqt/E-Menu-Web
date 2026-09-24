@@ -135,8 +135,8 @@ export default function DevicesPage() {
         <div className="ks__notice" role="alert">
           <AlertTriangle size={18} />
           <div>
-            <strong>Subscription required.</strong> Multi-device management is part of the
-            Subscription plan. You can see the devices already registered, but adding or
+            <strong>Active plan required.</strong> Multi-device management is part of the
+            active plan. You can see the devices already registered, but adding or
             re-registering devices requires an active subscription.
             <button
               type="button"
@@ -161,7 +161,7 @@ export default function DevicesPage() {
         <div className="ks__summaryCard">
           <span className="ks__summaryLabel">Plan</span>
           <span className="ks__summaryValue">
-            {subscriptionActive ? 'Subscription' : 'Free'}
+            {subscriptionActive ? billing.plan[0].toUpperCase() + billing.plan.slice(1) : 'Expired'}
           </span>
         </div>
       </section>

@@ -12,6 +12,8 @@ import {
 } from '../lib/executiveMetrics';
 import { generateAIAnalysis } from '../lib/aiAnalystService';
 import { useAiAccess } from '../hooks/useAiAccess';
+import { useOperationalAccess } from '../hooks/useOperationalAccess';
+import ReadOnlyNotice from '../components/ui/ReadOnlyNotice';
 import '../styles/reports.css';
 import '../styles/analytics.css';
 
@@ -26,6 +28,7 @@ export default function ReportsPage() {
   const { branchId, analytics, inventory, logs, aiAnalyticsData, hasOrders } = useBranchData();
   const { nickname, user, workspace } = useAuth();
   const aiEnabled = useAiAccess();
+  const operational = useOperationalAccess();
   const [rangeKey, setRangeKey] = useState('7d');
   const [commentary, setCommentary] = useState(null);
   const [aiBusy, setAiBusy] = useState(false);
@@ -77,6 +80,8 @@ export default function ReportsPage() {
 
   const generatedAt = new Date().toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' });
   const deltaText = (d) => (d?.available && d.pct !== null ? `${d.pct > 0 ? '+' : ''}${d.pct.toFixed(1)}% vs previous period` : 'no comparison data');
+
+  if (!operational) return <ReadOnlyNotice />;
 
   return (
     <>
@@ -171,12 +176,12 @@ export default function ReportsPage() {
             </section>
           )}
 
-          {view.forecast && (
+          {aiEnabled && view.forecast && (
             <section className="report__section">
               <h3 className="report__sectionTitle">Outlook</h3>
               <p style={{ lineHeight: 1.7, color: 'var(--text-2)' }}>
                 Tomorrow ({view.forecast.weekdayLabel}) is projected at <strong className="num" style={{ color: 'var(--text-1)' }}>{peso(view.forecast.value)}</strong> revenue
-                — an AI-generated forecast at {view.forecast.confidence}% confidence, based on {view.forecast.basis}. Treat as a planning aid, not a guarantee.
+                — a statistical estimate at {view.forecast.confidence}% confidence, based on {view.forecast.basis}. Treat as a planning aid, not a guarantee.
               </p>
             </section>
           )}

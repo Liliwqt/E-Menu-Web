@@ -27,7 +27,7 @@ import {
 import { useAuth } from './AuthContext';
 import { branchLabel as branchNameFor } from '../lib/branchLabel';
 import { generateAIAnalysis, clearAnalysisCache } from '../lib/aiAnalystService';
-import { useAiAccess } from '../hooks/useAiAccess';
+import { useAiModeAccess } from '../hooks/useAiAccess';
 
 const MIN_NOTIFICATION_INTERVAL_MS = 4 * 60 * 1000;   // 4 minutes
 const MAX_NOTIFICATION_INTERVAL_MS = 10 * 60 * 1000;  // 10 minutes
@@ -62,6 +62,7 @@ function createInitialState() {
 
   return {
     feedItems,
+    scopeKey: null,
     preparingBriefing: null,
     generating: false,
     error: null,
@@ -82,7 +83,7 @@ function reducer(state, action) {
       const next = [...filtered, item].slice(-12);
       // Persist to sessionStorage
       try { sessionStorage.setItem(SK_FEED_ITEMS, JSON.stringify(next)); } catch { /* */ }
-      return { ...state, feedItems: next };
+      return { ...state, feedItems: next, scopeKey: action.scopeKey };
     }
     case A.SET_PREPARING:
       return { ...state, preparingBriefing: action.payload };
@@ -98,7 +99,7 @@ function reducer(state, action) {
       try {
         sessionStorage.removeItem(SK_FEED_ITEMS);
       } catch { /* */ }
-      return { ...createInitialState(), feedItems: [], handoffComplete: false };
+      return { ...createInitialState(), feedItems: [], scopeKey: action.scopeKey || null, handoffComplete: false };
     }
     default:
       return state;
@@ -132,7 +133,7 @@ export function LiveAnalystProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, null, createInitialState);
   // This provider runs the background AI jobs on timers, so a wrong answer here
   // does not just show a panel — it spends money without being asked to.
-  const aiEnabled = useAiAccess();
+  const aiEnabled = useAiModeAccess('live');
   // Refs survive re-renders and never cause re-triggers.
   const generatingRef = useRef(false);
   const handoffInFlightRef = useRef(false);
@@ -152,6 +153,7 @@ export function LiveAnalystProvider({ children }) {
   const [branchDataVersion, setBranchDataVersion] = useReducer((x) => x + 1, 0);
 
   const { branchId: activeBranch } = useSubscription();
+  const feedScopeKey = `${user?.uid || ''}/${activeBranch || ''}`;
   const requestScope = useMemo(() => ({}), [user?.uid, activeBranch, aiEnabled]);
   const requestScopeRef = useRef(requestScope);
   requestScopeRef.current = requestScope;
@@ -185,6 +187,16 @@ export function LiveAnalystProvider({ children }) {
       branchDataRef.current = null;
     }
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    dispatch({ type: A.RESET, scopeKey: feedScopeKey });
+    clearTimeout(notificationTimerRef.current);
+    clearTimeout(randomTimerRef.current);
+    clearTimeout(hourlyTimerRef.current);
+    handoffInFlightRef.current = false;
+    liveInFlightRef.current = false;
+    handoffStartedRef.current = false;
+  }, [feedScopeKey]);
 
   useEffect(() => {
     if (aiEnabled) return;
@@ -237,7 +249,7 @@ export function LiveAnalystProvider({ children }) {
         }
 
         if (requestScopeRef.current !== requestScope || !mountedRef.current) return null;
-        dispatch({ type: A.ADD_FEED_ITEM, payload: result });
+        dispatch({ type: A.ADD_FEED_ITEM, payload: result, scopeKey: feedScopeKey });
 
         if (revealNotification && mountedRef.current) {
           showNotification();
@@ -263,7 +275,7 @@ export function LiveAnalystProvider({ children }) {
         }
       }
     },
-    [activeBranch, aiEnabled, showNotification, requestScope]
+    [activeBranch, aiEnabled, showNotification, requestScope, feedScopeKey]
   );
 
   // AI Shift Handoff (auto on login)
@@ -434,19 +446,20 @@ export function LiveAnalystProvider({ children }) {
     return () => clearTimeout(hourlyTimerRef.current);
   }, [aiEnabled, state.handoffComplete, activeBranch, branchDataVersion, generateLiveReport]);
 
-  const latestFeedItem = state.feedItems[state.feedItems.length - 1] || null;
-  const analysis = state.preparingBriefing || latestFeedItem;
+  const visibleFeed = aiEnabled && state.scopeKey === feedScopeKey ? state.feedItems : [];
+  const latestFeedItem = visibleFeed[visibleFeed.length - 1] || null;
+  const analysis = (aiEnabled && state.scopeKey === feedScopeKey ? state.preparingBriefing : null) || latestFeedItem;
 
   const contextValue = useMemo(
     () => ({
       // State
-      feedItems: state.feedItems,
+      feedItems: visibleFeed,
       latestAnalysis: analysis,
       preparingBriefing: state.preparingBriefing,
       generating: state.generating,
       error: state.error,
       handoffComplete: state.handoffComplete,
-      notificationOpen: state.notificationOpen,
+      notificationOpen: visibleFeed.length > 0 && state.notificationOpen,
       activeBranch,
       hasData: !!branchDataRef.current?.hasOrders,
 
@@ -459,6 +472,7 @@ export function LiveAnalystProvider({ children }) {
     }),
     [
       state,
+      visibleFeed,
       analysis,
       activeBranch,
       showNotification,

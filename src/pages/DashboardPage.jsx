@@ -21,10 +21,12 @@ import {
 } from '../lib/executiveMetrics';
 import { buildRecommendations } from '../lib/recommendations';
 import { generateAIAnalysis } from '../lib/aiAnalystService';
-import { useAiAccess, useAiDenial } from '../hooks/useAiAccess';
+import { useAiAccess, useAiDenial, useAiModeAccess } from '../hooks/useAiAccess';
 import ReadState from '../components/ui/ReadState';
 import { CAP } from '../lib/permissions';
 import UpgradePrompt from '../components/ui/UpgradePrompt';
+import { useOperationalAccess } from '../hooks/useOperationalAccess';
+import ReadOnlyNotice from '../components/ui/ReadOnlyNotice';
 import '../styles/dashboard.css';
 
 const ExecutivePresentation = lazy(() => import('../components/ai/ExecutivePresentation'));
@@ -116,6 +118,8 @@ export default function DashboardPage() {
   const [insightLoading, setInsightLoading] = useState(false);
   const [presentationOpen, setPresentationOpen] = useState(false);
   const aiEnabled = useAiAccess();
+  const operational = useOperationalAccess();
+  const premiumEnabled = useAiModeAccess('live');
   // Why AI is unavailable, so the prompt can say something true. Without this a
   // staff member was shown a plan upsell for a problem that is not about the plan.
   const aiDeniedBy = useAiDenial();
@@ -231,6 +235,7 @@ export default function DashboardPage() {
       <button className="btn btn--ghost" onClick={() => navigate(`/inventory/${branchId}?status=warning`)}>{getInventoryHealth(inventory).warning.length} low stock entries</button>
     </div>}
   </section>;
+  if (!operational) return <>{operations}<ReadOnlyNotice /></>;
   if (analyticsResource?.status === 'error' || logsResource?.status === 'error') return <>{operations}<ReadState resource={analyticsResource} label="dashboard" /><ReadState resource={logsResource} label="orders" /></>;
   if (!analyticsLoaded) {
     return (
@@ -374,7 +379,7 @@ export default function DashboardPage() {
                   desc: 'Next actions ranked by impact.',
                   onClick: () => window.dispatchEvent(new CustomEvent('emp:open-ai', { detail: { mode: 'opschat', userText: 'What are your top recommended actions right now, ranked by business impact?' } })),
                 },
-              ].map((mod) => (
+              ].filter(mod => premiumEnabled || !['AI Live Operations Analyst', 'AI Shift Handoff'].includes(mod.name)).map((mod) => (
                 <button key={mod.name} className="suite__card" onClick={mod.onClick}>
                   <span className="suite__icon"><mod.icon size={16} /></span>
                   <span className="suite__name">{mod.name}</span>
@@ -385,7 +390,7 @@ export default function DashboardPage() {
           ) : (
             <UpgradePrompt
               feature="AI Operations suite"
-              description="Unlock the AI Live Analyst, Shift Handoff, Revenue Leak Detection, AI Chat and Smart Recommendations with a 14-day trial of the Subscription plan."
+              description="Starter adds revenue AI; Premium adds the live analyst, shift handoff and simulations. Ask the owner to view plans."
               branchId={branchId}
               deniedBy={aiDeniedBy}
             />
@@ -560,7 +565,7 @@ export default function DashboardPage() {
             </SectionCard>
 
             <SectionCard title="Tomorrow's Prep Forecast" sub="AI-generated projection — not a guarantee" icon={CalendarClock} className="rise-6">
-              {view.forecast ? (
+              {aiEnabled && view.forecast ? (
                 <div style={{ display: 'grid', gap: 'var(--sp-3)' }}>
                   <div>
                     <div className="kpi__label">Projected revenue · {view.forecast.weekdayLabel}</div>
@@ -648,7 +653,7 @@ export default function DashboardPage() {
         </>
       )}
 
-      {aiEnabled && presentationOpen && (
+      {premiumEnabled && presentationOpen && (
         <Suspense fallback={null}>
           <ExecutivePresentation open={presentationOpen} onClose={() => setPresentationOpen(false)} />
         </Suspense>

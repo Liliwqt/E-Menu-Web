@@ -7,6 +7,7 @@ require firebase-admin to be installed; only constructing the real verifier touc
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -55,9 +56,9 @@ class FirebaseIdentityVerifier:
             if service_account_json:
                 import json
 
-                firebase_admin.initialize_app(credentials.Certificate(json.loads(service_account_json)))
+                firebase_admin.initialize_app(credentials.Certificate(json.loads(service_account_json)), {"databaseURL": os.environ.get("FIREBASE_DATABASE_URL")})
             else:
-                firebase_admin.initialize_app()
+                firebase_admin.initialize_app(options={"databaseURL": os.environ.get("FIREBASE_DATABASE_URL")})
 
     def verify(self, id_token: str) -> VerifiedIdentity:  # pragma: no cover - network/SDK path
         from firebase_admin import auth

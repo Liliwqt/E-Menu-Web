@@ -1,8 +1,7 @@
 """Composition root for the TouchOrders AI gateway (FastAPI on Railway).
 
-The process is deliberately stateless: no database, no persistence. Firebase Realtime Database is
-the sole operational datastore; token/cost accounting is available on OpenAI's platform usage
-dashboard; budgets and the circuit breaker are in-memory per process.
+Firebase Realtime Database holds branch entitlements, AI usage and curated insights.
+The OpenAI budget fuse and circuit breaker remain in-memory per process.
 """
 
 from __future__ import annotations
@@ -13,14 +12,15 @@ import uvicorn
 
 from touchorders_core.api.app import create_app
 from touchorders_core.api.auth import FirebaseIdentityVerifier
+from touchorders_core.api.entitlements import FirebaseEntitlementService
 from touchorders_core.domain.enums import AgentName
 from touchorders_core.llm.budget import BudgetTracker, DailyBudget
 from touchorders_core.llm.gateway import LLMGateway, OpenAIClient
 from touchorders_core.observability.logging import configure_logging, get_logger
 from touchorders_core.settings import Settings, get_settings
 
-# Global daily token fuse (per process), NOT a per-user limit — fairness is enforced by the
-# API's per-user daily request quota. This only caps catastrophic runaway (a bug or abuse storm)
+# Global daily token fuse (per process). Branch-wide allowances are enforced in
+# Firebase. This only caps catastrophic runaway (a bug or abuse storm)
 # at roughly $6 input + $5 output per day on gpt-4o-mini across ALL tenants. All BFF traffic
 # bills to the BUSINESS_ANALYST role. Sized for ~500 cafes at post-optimization usage.
 RUNAWAY_FUSE = {AgentName.BUSINESS_ANALYST: DailyBudget(input=40_000_000, output=8_000_000)}
@@ -64,7 +64,14 @@ def build_app(settings: Settings | None = None):
     except Exception as exc:  # noqa: BLE001 - firebase-admin/cred absent -> auth-gated routes 503
         logger.warning("firebase_verifier_unconfigured", error=str(exc))
 
-    return create_app(settings, gateway=gateway, identity_verifier=verifier)
+    entitlement_service = None
+    if verifier and os.environ.get("FIREBASE_DATABASE_URL"):
+        from firebase_admin import db
+        entitlement_service = FirebaseEntitlementService(db)
+    else:
+        logger.warning("billing_database_unconfigured", detail="AI requests disabled until FIREBASE_DATABASE_URL is set")
+    return create_app(settings, gateway=gateway, identity_verifier=verifier,
+                      entitlement_service=entitlement_service)
 
 
 app = build_app()

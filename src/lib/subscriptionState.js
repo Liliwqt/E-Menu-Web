@@ -1,5 +1,6 @@
 import { resolveBranchRef } from './branchRef.js';
 import { canAccessBranch, getUserBranch } from '../config/authConfig.js';
+import { isSubscriptionActive, PLAN_PRICE_PHP } from './planFeatures.js';
 
 export function subscriptionBranch(workspace, pathname) {
   const parts = pathname.split('/').filter(Boolean);
@@ -9,24 +10,31 @@ export function subscriptionBranch(workspace, pathname) {
   return canAccessBranch(workspace, branch) ? branch : null;
 }
 
-// Own listener lifetime and expiry ticks together; callbacks from an old scope
-// must never repopulate billing after logout or navigation.
 export function watchSubscription({ listen, emit, now = Date.now, schedule = setTimeout, cancel = clearTimeout }) {
   let alive = true;
   let timer;
   const clear = () => { if (timer !== undefined) cancel(timer); };
-  const publish = profile => {
+  const publish = entitlement => {
     if (!alive) return;
     clear();
-    if (!profile || !['free', 'subscription'].includes(profile.plan) || !profile.subscriptionStatus) {
+    if (!entitlement
+        || !Object.hasOwn(PLAN_PRICE_PHP, entitlement.plan)
+        || !['trialing', 'active'].includes(entitlement.subscriptionStatus)
+        || !Number.isFinite(Number(entitlement.periodEndAt))) {
       emit({ status: 'error', billing: null });
       return;
     }
-    const billing = { plan: profile.plan, subscriptionStatus: profile.subscriptionStatus, trialEndsAt: profile.trialEndsAt ?? null };
+    const billing = {
+      plan: entitlement.plan,
+      subscriptionStatus: entitlement.subscriptionStatus,
+      periodStartAt: Number(entitlement.periodStartAt),
+      periodEndAt: Number(entitlement.periodEndAt),
+      trialStartedAt: Number(entitlement.trialStartedAt || 0),
+    };
     emit({ status: 'ready', billing, checkedAt: now() });
-    const remaining = Number(billing.trialEndsAt) - now();
-    if (billing.subscriptionStatus === 'trialing' && remaining > 0) {
-      timer = schedule(() => publish(profile), Math.min(remaining + 1, 60_000));
+    const remaining = billing.periodEndAt - now();
+    if (isSubscriptionActive(billing, now()) && remaining > 0) {
+      timer = schedule(() => publish(entitlement), Math.min(remaining + 1, 60000));
     }
   };
   const stop = listen(publish, () => {

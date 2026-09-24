@@ -1,3 +1,5 @@
+import { useOperationalAccess } from '../hooks/useOperationalAccess';
+import ReadOnlyNotice from '../components/ui/ReadOnlyNotice';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, UserPlus, Trash2, X, ShieldCheck, Users } from 'lucide-react';
@@ -33,11 +35,12 @@ export default function TeamPage() {
   const { branchId } = useBranchData();
   const navigate = useNavigate();
   const { user, workspace, can, role } = useAuth();
+  const operational = useOperationalAccess();
 
   const companyId = workspace?.companyId;
   const branchName = branchLabel({ workspace, branchId });
-  const canAddStaff = can(CAP.MANAGE_STAFF);
-  const canAddManager = can(CAP.MANAGE_MANAGERS);
+  const canAddStaff = operational && can(CAP.MANAGE_STAFF);
+  const canAddManager = operational && can(CAP.MANAGE_MANAGERS);
 
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -83,6 +86,7 @@ export default function TeamPage() {
 
   async function submitAdd(event) {
     event.preventDefault();
+    if (!operational) return;
     setError('');
     setNotice('');
 
@@ -110,7 +114,6 @@ export default function TeamPage() {
         displayName: name,
         role: addRole,
         branchName,
-        plan: workspace?.plan,
       });
       setAddOpen(false);
       setNotice(
@@ -135,7 +138,7 @@ export default function TeamPage() {
   }
 
   async function confirmRemoveMember() {
-    if (!confirmRemove) return;
+    if (!operational || !confirmRemove) return;
     setWorking(true);
     setError('');
     try {
@@ -168,6 +171,7 @@ export default function TeamPage() {
 
   return (
     <div className="team">
+      <ReadOnlyNotice />
       <header className="team__header">
         <button type="button" className="team__back" onClick={() => navigate(`/home/${branchId}`)}>
           <ChevronLeft size={18} /> Back to dashboard
@@ -244,7 +248,7 @@ export default function TeamPage() {
           </ul>
         )}
 
-        {!canAddStaff && (
+        {operational && !canAddStaff && (
           <p className="team__footnote">
             Only the branch manager or the business owner can add accounts here.
           </p>
@@ -342,7 +346,7 @@ export default function TeamPage() {
               >
                 Cancel
               </button>
-              <button type="submit" className="btn btn--primary" disabled={working}>
+              <button type="submit" className="btn btn--primary" disabled={working || !operational}>
                 {working ? 'Creating…' : 'Create account'}
               </button>
             </div>
@@ -394,7 +398,7 @@ export default function TeamPage() {
                 type="button"
                 className="btn btn--danger"
                 onClick={confirmRemoveMember}
-                disabled={working}
+                disabled={working || !operational}
               >
                 {working ? 'Removing…' : 'Remove access'}
               </button>

@@ -1,3 +1,5 @@
+import { useOperationalAccess } from '../hooks/useOperationalAccess';
+import ReadOnlyNotice from '../components/ui/ReadOnlyNotice';
 import { useMemo, useRef, useState } from 'react';
 import {
   Boxes, Search, AlertTriangle, PackageCheck, PackageOpen, Gauge,
@@ -29,7 +31,7 @@ const STATUS_META = {
   healthy: { label: 'Healthy', pill: 'pill--success', bar: 'var(--success)' },
 };
 
-function StockModal({ item, allSizes = [], branchId, onClose }) {
+function StockModal({ item, allSizes = [], branchId, onClose, canSave }) {
   const { user, can } = useAuth();
   // Restocking is anyone's job; deciding what counts as low stock is not.
   const canEditThresholds = can(CAP.EDIT_THRESHOLDS);
@@ -66,7 +68,7 @@ function StockModal({ item, allSizes = [], branchId, onClose }) {
   }
 
   async function save() {
-    if (saveLock.current) return;
+    if (!canSave || saveLock.current) return;
     saveLock.current = true;
     setSaving(true);
     setError('');
@@ -112,15 +114,16 @@ function StockModal({ item, allSizes = [], branchId, onClose }) {
       footer={
         <>
           <button className="btn btn--ghost" onClick={onClose} disabled={saving}>Cancel</button>
-          <button className="btn btn--primary" onClick={save} disabled={saving}>
+          <button className="btn btn--primary" onClick={save} disabled={saving || !canSave}>
             {saving ? <span className="spinner" style={{ borderTopColor: '#fff', borderColor: 'rgba(255,255,255,0.3)' }} /> : 'Save changes'}
           </button>
         </>
       }
     >
       {error && <div className="login__error" role="alert" style={{ marginBottom: 'var(--sp-4)' }}>{error}</div>}
+      {!canSave && <p role="status">This branch is read-only. The owner must renew before saving stock.</p>}
 
-      <fieldset disabled={saving} className="workflow-fields" style={{ display: 'grid', gap: 'var(--sp-5)' }}>
+      <fieldset disabled={saving || !canSave} className="workflow-fields" style={{ display: 'grid', gap: 'var(--sp-5)' }}>
         <div className="stock-preview" role="status">
           <span>Current <strong>{previous} {unit}</strong></span>
           <span>Change <strong>{delta > 0 ? '+' : ''}{delta}</strong></span>
@@ -238,6 +241,7 @@ function StockModal({ item, allSizes = [], branchId, onClose }) {
 
 export default function InventoryPage() {
   const { branchId, inventory, inventoryLoaded, analytics, inventoryResource } = useBranchData();
+  const operational = useOperationalAccess();
   const [search, setSearch] = useState('');
   const [params, setParams] = useSearchParams();
   const requestedStatus = params.get('status');
@@ -311,6 +315,7 @@ export default function InventoryPage() {
 
   return (
     <>
+      <ReadOnlyNotice />
       {/* ── Health summary ── */}
       <div className="inv__summary">
         <div className="card inv__summaryCard rise-1">
@@ -411,7 +416,8 @@ export default function InventoryPage() {
                 key={item.id}
                 className={`card card--hover inv-item rise-${Math.min(6, (idx % 6) + 1)}`}
                 style={{ textAlign: 'left', cursor: 'pointer', border: item.status === 'critical' ? '1px solid var(--danger)' : undefined }}
-                onClick={() => setSelected(item)}
+                onClick={() => { if (operational) setSelected(item); }}
+                disabled={!operational}
                 aria-label={`Adjust stock for ${item.productName} ${item._sizeName || 'Medium'}`}
               >
                 <div className="inv-item__head">
@@ -458,6 +464,7 @@ export default function InventoryPage() {
           item={selected}
           allSizes={items.filter((i) => i._itemId === selected._itemId && i._category === selected._category)}
           branchId={branchId}
+          canSave={operational}
           onClose={() => setSelected(null)}
         />
       )}

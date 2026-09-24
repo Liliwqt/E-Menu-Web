@@ -5,6 +5,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useBranchData } from '../../context/BranchDataContext';
 import { branchLabel as branchNameFor } from '../../lib/branchLabel';
 import { generateAIAnalysis } from '../../lib/aiAnalystService';
+import { useSubscription } from '../../context/SubscriptionContext';
+import { canUseAiMode } from '../../lib/planFeatures';
 import '../../styles/ai.css';
 
 /**
@@ -113,59 +115,13 @@ function loadChat(branchId) {
 export default function AIAnalystDrawer({ open, onClose, initialAction = null }) {
   const { nickname, user, workspace } = useAuth();
   const { branchId, aiAnalyticsData, hasOrders } = useBranchData();
+  const { billing } = useSubscription();
+  const [inputMode, setInputMode] = useState('opschat');
   const [messages, setMessages] = useState(() => loadChat(branchId));
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const bodyRef = useRef(null);
   const inputRef = useRef(null);
-
-  const USAGE_LIMIT = 10;
-  const COOLDOWN_MS = 60 * 60 * 1000;
-
-  const getUsageState = () => {
-    try {
-      const data = JSON.parse(localStorage.getItem(`emp_ai_usage_${branchId}`)) || { count: 0, cooldownUntil: null };
-      if (data.cooldownUntil && Date.now() > data.cooldownUntil) {
-        return { count: 0, cooldownUntil: null };
-      }
-      return data;
-    } catch {
-      return { count: 0, cooldownUntil: null };
-    }
-  };
-
-  const incrementUsage = () => {
-    const state = getUsageState();
-    state.count += 1;
-    if (state.count >= USAGE_LIMIT) {
-      state.cooldownUntil = Date.now() + COOLDOWN_MS;
-    }
-    localStorage.setItem(`emp_ai_usage_${branchId}`, JSON.stringify(state));
-    return state;
-  };
-
-  const [usageState, setUsageState] = useState(getUsageState());
-  const [cooldownRemaining, setCooldownRemaining] = useState('');
-
-  useEffect(() => {
-    if (!usageState.cooldownUntil) return;
-    const update = () => {
-      const remaining = usageState.cooldownUntil - Date.now();
-      if (remaining <= 0) {
-        setUsageState({ count: 0, cooldownUntil: null });
-        localStorage.removeItem(`emp_ai_usage_${branchId}`);
-        setCooldownRemaining('');
-      } else {
-        const m = Math.ceil(remaining / 60000);
-        setCooldownRemaining(`${m} minute${m !== 1 ? 's' : ''}`);
-      }
-    };
-    update();
-    const interval = setInterval(update, 1000);
-    return () => clearInterval(interval);
-  }, [usageState.cooldownUntil, branchId]);
-
-  const isCooldown = !!usageState.cooldownUntil;
 
   const branchLabel = branchNameFor({ workspace, branchId });
   const managerNickname = nickname || user?.email?.split('@')[0] || 'Manager';
@@ -221,20 +177,12 @@ export default function AIAnalystDrawer({ open, onClose, initialAction = null })
   }
 
   async function runMode(mode, { userText, scenario } = {}) {
-    if (busy) return;
-    
-    const currentUsage = getUsageState();
-    if (currentUsage.cooldownUntil) {
-      const m = Math.ceil((currentUsage.cooldownUntil - Date.now()) / 60000);
-      setMessages((prev) => [...prev, { id: nextId(), role: 'ai', text: `Usage limit reached to prevent token overuse. Please try again in ${m} minute${m !== 1 ? 's' : ''}.` }]);
-      return;
-    }
+    if (busy || !canUseAiMode(billing, mode)) return;
 
     if (userText) {
       setMessages((prev) => [...prev, { id: nextId(), role: 'user', text: userText }]);
     }
     setBusy(true);
-    setUsageState(incrementUsage());
     try {
       // Chat modes carry recent turns so follow-ups resolve in context; one-click reports don't.
       const isChat = mode === 'opschat' || mode === 'simulation';
@@ -272,7 +220,8 @@ export default function AIAnalystDrawer({ open, onClose, initialAction = null })
     const text = input.trim();
     if (!text || busy) return;
     setInput('');
-    runMode('opschat', { userText: text, scenario: text });
+    runMode(inputMode, { userText: text, scenario: text });
+    setInputMode('opschat');
   }
 
   if (!open) return null;
@@ -310,29 +259,30 @@ export default function AIAnalystDrawer({ open, onClose, initialAction = null })
         <div className="ai-drawer__tools">
           <button
             className="ai-tool"
-            disabled={busy || !hasOrders || isCooldown}
+            disabled={busy || !hasOrders || !canUseAiMode(billing, 'live')}
             onClick={() => runMode('live', { userText: 'Give me a live operations update.' })}
           >
             <Radio size={13} /> Live ops pulse
           </button>
           <button
             className="ai-tool"
-            disabled={busy || !hasOrders || isCooldown}
+            disabled={busy || !hasOrders || !canUseAiMode(billing, 'briefing')}
             onClick={() => runMode('briefing', { userText: 'Give me my shift briefing.' })}
           >
             <Sunrise size={13} /> Shift briefing
           </button>
           <button
             className="ai-tool"
-            disabled={busy || !hasOrders || isCooldown}
+            disabled={busy || !hasOrders}
             onClick={() => runMode('leak', { userText: 'Where am I losing revenue?' })}
           >
             <SearchCheck size={13} /> Find revenue leaks
           </button>
           <button
             className="ai-tool"
-            disabled={busy || !hasOrders || isCooldown}
+            disabled={busy || !hasOrders || !canUseAiMode(billing, 'simulation')}
             onClick={() => {
+              setInputMode('simulation');
               setInput('What happens if ');
               inputRef.current?.focus();
             }}
@@ -348,11 +298,11 @@ export default function AIAnalystDrawer({ open, onClose, initialAction = null })
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-            placeholder={isCooldown ? `Cooldown active (${cooldownRemaining})` : hasOrders ? 'Ask about sales, staffing, inventory…' : 'AI unlocks after the first order'}
-            disabled={busy || !hasOrders || isCooldown}
+            placeholder={hasOrders ? 'Ask about sales, staffing, inventory…' : 'AI unlocks after the first order'}
+            disabled={busy || !hasOrders}
             aria-label="Message the AI analyst"
           />
-          <button className="btn btn--primary btn--icon" onClick={send} disabled={busy || !input.trim() || isCooldown} aria-label="Send">
+          <button className="btn btn--primary btn--icon" onClick={send} disabled={busy || !input.trim()} aria-label="Send">
             <SendHorizonal size={17} />
           </button>
         </div>

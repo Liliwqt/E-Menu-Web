@@ -79,7 +79,7 @@ const SECTIONS = [
       },
       {
         heading: 'What it does',
-        text: 'Watch orders come in right now.\n\n• See what customers just bought.\n• Check if they paid with Cash or Card.\n• Click any order to see full details.',
+        text: 'Watch orders come in right now.\n\n• See what customers just bought.\n• See the recorded QR or pay-at-counter status; neither verifies settlement.\n• Click any order to see full details.',
       }
     ],
   },
@@ -143,7 +143,7 @@ const SECTIONS = [
       },
       {
         heading: 'What it does',
-        text: 'A list of every single order.\n\n• Sort by cash or card payments.\n• See cancelled or refunded orders (crossed out).\n• Perfect for end-of-day cash drawer balancing.',
+        text: 'A list of every single order.\n\n• Search recorded orders and review payment statuses.\n• QR payment is customer-reported; pay-at-counter requires staff collection.\n• These records do not verify settlement or balance a cash drawer.',
       }
     ],
   },

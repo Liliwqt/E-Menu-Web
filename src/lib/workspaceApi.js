@@ -1,6 +1,6 @@
 import { get, ref, serverTimestamp, set, update, remove } from 'firebase/database';
 import { database } from './firebase';
-import { PLAN_FREE, PLAN_SUBSCRIPTION, SUBSCRIPTION_STATUS } from './planFeatures';
+import { PLAN_STARTER, SUBSCRIPTION_STATUS, TRIAL_DURATION_MS } from './planFeatures';
 import { resolveRole } from './permissions';
 
 export { isAiEnabled } from './planFeatures';
@@ -107,7 +107,6 @@ export async function loadAccessContext(uid, email) {
   };
 }
 
-const TRIAL_DURATION_MS = 14 * 24 * 60 * 60 * 1000;
 
 export async function createWorkspace({
   uid,
@@ -123,7 +122,6 @@ export async function createWorkspace({
   currency,
   timezone,
   operatingHours,
-  plan,
 }) {
   if (!uid) throw new Error('A signed-in account is required.');
   const name = cleanText(branchName, 80);
@@ -138,17 +136,11 @@ export async function createWorkspace({
   if (name.length < 2) throw new Error('Enter a branch name with at least two characters.');
   if (branchLocation.length < 2) throw new Error('Enter the branch location.');
 
-  const selectedPlan = plan === PLAN_SUBSCRIPTION ? PLAN_SUBSCRIPTION : PLAN_FREE;
   if (company.length < 2) throw new Error('Enter a company name with at least two characters.');
   const companyId = createCompanyId(company);
   const branchId = createBranchId(company, name);
   const now = serverTimestamp();
-  const subscriptionStatus =
-    selectedPlan === PLAN_SUBSCRIPTION
-      ? SUBSCRIPTION_STATUS.TRIALING
-      : SUBSCRIPTION_STATUS.INACTIVE;
-  const trialEndsAt =
-    selectedPlan === PLAN_SUBSCRIPTION ? Date.now() + TRIAL_DURATION_MS : null;
+  const trialEndsAt = Date.now() + TRIAL_DURATION_MS;
 
   const workspace = {
     companyId,
@@ -162,9 +154,6 @@ export async function createWorkspace({
     currency: branchCurrency,
     timezone: branchTimezone,
     operatingHours: hours,
-    plan: selectedPlan,
-    subscriptionStatus,
-    trialEndsAt,
     onboardingComplete: false,
     createdAt: now,
   };
@@ -179,9 +168,6 @@ export async function createWorkspace({
     currency: branchCurrency,
     timezone: branchTimezone,
     operatingHours: hours,
-    plan: selectedPlan,
-    subscriptionStatus,
-    trialEndsAt,
   };
   workspace.branches = { [branchId]: branch };
 
@@ -226,9 +212,16 @@ export async function createWorkspace({
     branchName: name,
     companyId,
     ownerUid: uid,
-    plan: selectedPlan,
   };
   await set(ref(database, `${companyId}/branches/${branchId}/branchProfile`), branchProfileBase);
+  // This is the only client-authorized entitlement write. Rules allow creation
+  // once, for this owner and branch, with a 14-day Starter period. Paid changes
+  // require the private Admin SDK operator command.
+  await set(ref(database, `billingEntitlements/${companyId}/${branchId}`), {
+    companyId, branchId, ownerUid: uid, plan: PLAN_STARTER,
+    subscriptionStatus: SUBSCRIPTION_STATUS.TRIALING,
+    periodStartAt: now, trialStartedAt: now, periodEndAt: trialEndsAt,
+  });
 
   // Step 1c: merge the extended fields one at a time (small deterministic writes)
   const extendedFields = {
@@ -241,13 +234,10 @@ export async function createWorkspace({
     currency: branchCurrency,
     timezone: branchTimezone,
     operatingHours: hours,
-    subscriptionStatus,
-    trialEndsAt,
     createdAt: now,
   };
   for (const [field, value] of Object.entries(extendedFields)) {
-    // Skip null/undefined values (e.g. trialEndsAt on the free plan): writing
-    // null via set() to a leaf is a delete, which is fine, but skipping is cleaner.
+    // Skip absent optional branch display fields.
     if (value === null || value === undefined) continue;
     await set(
       ref(database, `${companyId}/branches/${branchId}/branchProfile/${field}`),
@@ -276,9 +266,9 @@ export async function createWorkspace({
     addedAt: serverTimestamp(),
   });
 
-  // The full workspace object (including branchId, plan, branches, etc.) is already
+  // The full workspace object (including branchId and branches) is already
   // embedded in userProfile.workspace from the set() above. Do NOT overwrite it with
-  // a bare { onboardingComplete: true } stub — doing so strips branchId/plan and makes
+  // a bare { onboardingComplete: true } stub — doing so strips branchId and makes
   // getUserBranch() return null, which redirects to `/home/null` (grey screen).
   await set(ref(database, `${companyId}/users/${uid}/workspace`), {
     ...workspace,
@@ -307,7 +297,6 @@ export async function addBranchToWorkspace({
   currency,
   timezone,
   operatingHours,
-  plan,
 }) {
   if (!uid) throw new Error('A signed-in account is required.');
   const currentWorkspace = await loadWorkspace(uid);
@@ -328,7 +317,7 @@ export async function addBranchToWorkspace({
     throw new Error('That branch identifier is already in use. Please try again.');
   }
 
-  const selectedPlan = plan === PLAN_SUBSCRIPTION ? PLAN_SUBSCRIPTION : PLAN_FREE;
+  const trialEndsAt = Date.now() + TRIAL_DURATION_MS;
   const branch = {
     branchId,
     name,
@@ -338,9 +327,6 @@ export async function addBranchToWorkspace({
     currency: cleanText(currency, 3) || 'PHP',
     timezone: cleanText(timezone, 60) || 'Asia/Manila',
     operatingHours: cleanText(operatingHours, 120),
-    plan: selectedPlan,
-    subscriptionStatus: currentWorkspace.subscriptionStatus || SUBSCRIPTION_STATUS.INACTIVE,
-    trialEndsAt: currentWorkspace.trialEndsAt || null,
     ownerUid: uid,
   };
   const now = serverTimestamp();
@@ -353,7 +339,11 @@ export async function addBranchToWorkspace({
     branchName: name,
     companyId,
     ownerUid: uid,
-    plan: selectedPlan,
+  });
+  await set(ref(database, `billingEntitlements/${companyId}/${branchId}`), {
+    companyId, branchId, ownerUid: uid, plan: PLAN_STARTER,
+    subscriptionStatus: SUBSCRIPTION_STATUS.TRIALING,
+    periodStartAt: now, trialStartedAt: now, periodEndAt: trialEndsAt,
   });
   const branchExtras = {
     businessName: company,
@@ -365,8 +355,6 @@ export async function addBranchToWorkspace({
     currency: branch.currency,
     timezone: branch.timezone,
     operatingHours: branch.operatingHours,
-    subscriptionStatus: branch.subscriptionStatus,
-    trialEndsAt: branch.trialEndsAt,
     createdAt: now,
   };
   for (const [field, value] of Object.entries(branchExtras)) {
@@ -403,9 +391,6 @@ export async function addBranchToWorkspace({
       name: currentWorkspace.branchName,
       location: currentWorkspace.location,
       serviceType: currentWorkspace.serviceType,
-      plan: currentWorkspace.plan,
-      subscriptionStatus: currentWorkspace.subscriptionStatus,
-      trialEndsAt: currentWorkspace.trialEndsAt || null,
     },
   };
   const updatedWorkspace = {
@@ -612,41 +597,6 @@ export async function deregisterDevice(uid, branchId, deviceUid) {
   await setDeviceActive(uid, branchId, deviceUid, false);
 }
 
-export async function upgradeToSubscription(uid, branchId) {
-  if (!uid || !branchId) throw new Error('uid and branchId are required.');
-  const workspace = await loadWorkspace(uid);
-  const path = branchPath(workspace?.companyId, branchId);
-  const now = serverTimestamp();
-  const trialEndsAt = Date.now() + TRIAL_DURATION_MS;
-
-  const billing = { plan: PLAN_SUBSCRIPTION, subscriptionStatus: SUBSCRIPTION_STATUS.TRIALING, trialEndsAt, updatedAt: now };
-  const updates = {};
-  for (const [field, value] of Object.entries(billing)) {
-    updates[`${workspace.companyId}/users/${uid}/workspace/${field}`] = value;
-    updates[`${path}/branchProfile/${field}`] = value;
-  }
-  await update(ref(database), updates);
-
-  return loadWorkspace(uid);
-}
-
-export async function downgradeToFree(uid, branchId) {
-  if (!uid || !branchId) throw new Error('uid and branchId are required.');
-  const workspace = await loadWorkspace(uid);
-  const path = branchPath(workspace?.companyId, branchId);
-  const now = serverTimestamp();
-
-  const billing = { plan: PLAN_FREE, subscriptionStatus: SUBSCRIPTION_STATUS.INACTIVE, trialEndsAt: null, updatedAt: now };
-  const updates = {};
-  for (const [field, value] of Object.entries(billing)) {
-    updates[`${workspace.companyId}/users/${uid}/workspace/${field}`] = value;
-    updates[`${path}/branchProfile/${field}`] = value;
-  }
-  await update(ref(database), updates);
-
-  return loadWorkspace(uid);
-}
-
 // ─── Team management ────────────────────────────────────────────────────────
 //
 // Accounts are provisioned by the owner (or, for staff, by the branch manager).
@@ -719,7 +669,6 @@ export async function provisionTeamMember({
   displayName,
   role,
   branchName,
-  plan = PLAN_FREE,
 }) {
   if (!companyId || !branchId || !memberUid) {
     throw new Error('companyId, branchId and memberUid are required.');
@@ -758,16 +707,9 @@ export async function provisionTeamMember({
     addedAt: now,
   });
 
-  // The member's own workspace snapshot. Mirrors the shape onboarding produces so
-  // getUserBranch()/canAccessBranch() work unchanged for a non-owner.
-  //
-  // The plan state is read back off the branch rather than taken from the caller.
-  // A workspace carrying `plan` but no `subscriptionStatus` reads as inactive:
-  // isSubscriptionActive() checks the status and falls through to false, so a
-  // manager on a subscribed branch was treated as having no subscription and lost
-  // the AI tools their role grants. The branch profile is the record that knows
-  // whether the branch is actually subscribed, so it is the one to copy.
-  const branchPlan = await get(ref(database, `${companyId}/branches/${branchId}/branchProfile`))
+  // Membership and branch navigation live in the personal workspace.
+  // Billing is read only from billingEntitlements by the subscription provider.
+  const branchProfile = await get(ref(database, `${companyId}/branches/${branchId}/branchProfile`))
     .then((snap) => (snap.exists() ? snap.val() : null))
     .catch(() => null);
 
@@ -776,10 +718,7 @@ export async function provisionTeamMember({
     branchId,
     branchName: branchName || branchId,
     businessName: branchName || branchId,
-    companyName: branchPlan?.companyName || '',
-    plan: branchPlan?.plan || plan,
-    subscriptionStatus: branchPlan?.subscriptionStatus ?? null,
-    trialEndsAt: branchPlan?.trialEndsAt ?? null,
+    companyName: branchProfile?.companyName || '',
     onboardingComplete: true,
     createdAt: now,
   };

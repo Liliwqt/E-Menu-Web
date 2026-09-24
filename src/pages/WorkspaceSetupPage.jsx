@@ -1,41 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, MapPin, Sparkles, Store } from 'lucide-react';
+import { MapPin, Store } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { PLAN_FREE, PLAN_SUBSCRIPTION } from '../lib/planFeatures';
 import '../styles/onboarding.css';
-
-const PLANS = [
-  {
-    id: PLAN_FREE,
-    name: 'Free',
-    price: '₱0',
-    description: 'Run the daily restaurant operation without AI.',
-    features: [
-      'Menu and inventory management',
-      'Live device orders',
-      'Basic sales dashboard',
-      'Order history',
-    ],
-  },
-  {
-    id: PLAN_SUBSCRIPTION,
-    name: 'Subscription',
-    price: '14-day AI trial',
-    description: 'Everything in Free, plus AI operations intelligence.',
-    features: [
-      'AI Operations Analyst and chat',
-      'AI reports and executive presentation',
-      'Proactive AI insights',
-      'Multi-device management',
-    ],
-  },
-];
 
 export default function WorkspaceSetupPage() {
   const navigate = useNavigate();
   const { user, completeWorkspace, loading, logout } = useAuth();
-  const [plan, setPlan] = useState(PLAN_FREE);
   const [companyName, setCompanyName] = useState('');
   const [branchName, setBranchName] = useState('');
   const [location, setLocation] = useState('');
@@ -59,7 +30,6 @@ export default function WorkspaceSetupPage() {
         currency,
         timezone,
         operatingHours,
-        plan,
       });
       navigate(`/home/${workspace.branchId}`, { replace: true });
     } catch (setupError) {
@@ -78,45 +48,12 @@ export default function WorkspaceSetupPage() {
             </p>
             <h1>Set up your restaurant workspace</h1>
             <p>
-              Choose your plan and add the operating details your team needs. You can start managing
-              orders as soon as setup is complete.
+              Add your operating details. Your branch starts with a one-time 14-day Starter trial.
             </p>
           </div>
         </header>
 
         <form onSubmit={finish} className="onboard__form">
-          <fieldset>
-            <legend>Choose your plan</legend>
-            <div className="onboard__plans">
-              {PLANS.map((option) => (
-                <label className={`onboard__plan ${plan === option.id ? 'is-selected' : ''}`} key={option.id}>
-                  <input
-                    type="radio"
-                    name="plan"
-                    value={option.id}
-                    checked={plan === option.id}
-                    onChange={() => setPlan(option.id)}
-                  />
-                  <div className="onboard__planHead">
-                    <strong>{option.name}</strong>
-                    <span>{option.price}</span>
-                  </div>
-                  <p>{option.description}</p>
-                  <ul>
-                    {option.features.map((feature) => (
-                      <li key={feature}><Check size={14} /> {feature}</li>
-                    ))}
-                  </ul>
-                  {option.id === PLAN_SUBSCRIPTION && (
-                    <small>
-                      <Sparkles size={13} /> AI trial starts immediately; no charge until the trial ends.
-                    </small>
-                  )}
-                </label>
-              ))}
-            </div>
-          </fieldset>
-
           <fieldset>
             <legend>Branch details</legend>
             <label>

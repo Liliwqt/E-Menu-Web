@@ -1,5 +1,5 @@
 import { pilotAiConfig } from './pilotAiConfig';
-import { fetchWithAppCheck } from './firebase';
+import { fetchWithAppCheck, branchDataPath } from './firebase';
 import { buildSystemPrompt, buildDataPrompt, parseModelJson } from './aiPrompts';
 import { describeAiFailure } from './aiFailure';
 
@@ -76,6 +76,10 @@ async function requestAnalysis(analyticsData, mode, branchId) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
+        companyId: branchDataPath(branchId).split('/')[0],
+        branchId,
+        mode,
+        requestId: crypto.randomUUID(),
         model,
         messages: [
           { role: 'system', content: systemPrompt },

@@ -7,11 +7,10 @@ import '../../styles/upgrade-prompt.css';
 
 export default function UpgradePrompt({ feature, title, description, branchId, compact = false, deniedBy = null }) {
   const navigate = useNavigate();
-  const { billing: workspace, status } = useSubscription();
+  const { billing, status } = useSubscription();
   const trialEnding =
-    workspace?.plan === 'subscription' &&
-    workspace?.subscriptionStatus === 'trialing' &&
-    Number(workspace?.trialEndsAt || 0) - Date.now() < 3 * 24 * 60 * 60 * 1000;
+    billing?.subscriptionStatus === 'trialing' &&
+    Number(billing?.periodEndAt || 0) - Date.now() < 3 * 24 * 60 * 60 * 1000;
 
   // A role problem is not a billing problem, and the person reading this cannot
   // fix either one from here. Pointing them at the plans page would be worse than
@@ -36,8 +35,8 @@ export default function UpgradePrompt({ feature, title, description, branchId, c
           {roleDenied
             ? 'The AI analyst is available to branch managers and the business owner. Everything else on this dashboard is yours to use.'
             : trialEnding
-              ? 'Activate billing to keep AI features, or your workspace will revert to the Free plan.'
-              : description || `The ${feature || 'requested'} feature is part of the Subscription plan. Start a 14-day AI trial to unlock it.`}
+              ? 'Arrange verified payment with the service operator to keep AI access after the trial.'
+              : description || `The ${feature || 'requested'} feature needs an active Starter or Premium plan. Ask the owner to view plans.`}
         </p>
         {!roleDenied && (
           <div className="up__actions">

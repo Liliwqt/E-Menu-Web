@@ -18,7 +18,7 @@ export function SubscriptionProvider({ children }) {
   useEffect(() => {
     if (!key) return undefined;
     return watchSubscription({
-      listen: (next, fail) => onValue(ref(database, `${companyId}/branches/${branchId}/branchProfile`), snapshot => next(snapshot.val()), fail),
+      listen: (next, fail) => onValue(ref(database, `billingEntitlements/${companyId}/${branchId}`), snapshot => next(snapshot.val()), fail),
       emit: next => setState({ ...next, key, attempt, scope }),
     });
   }, [key, companyId, branchId, attempt, scope]);

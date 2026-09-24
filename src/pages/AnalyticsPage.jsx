@@ -16,7 +16,9 @@ import {
   getPeriodProductStats, formatHourLabel,
 } from '../lib/executiveMetrics';
 import { generateAIAnalysis } from '../lib/aiAnalystService';
-import { useAiAccess } from '../hooks/useAiAccess';
+import { useAiAccess, useAiModeAccess } from '../hooks/useAiAccess';
+import { useOperationalAccess } from '../hooks/useOperationalAccess';
+import ReadOnlyNotice from '../components/ui/ReadOnlyNotice';
 import { CAP } from '../lib/permissions';
 import '../styles/analytics.css';
 import '../styles/dashboard.css';
@@ -76,6 +78,8 @@ export default function AnalyticsPage() {
   const canCorrectAnalytics = can(CAP.CORRECT_ANALYTICS);
   const canExportReports = can(CAP.EXPORT_REPORTS);
   const aiEnabled = useAiAccess();
+  const operational = useOperationalAccess();
+  const premiumEnabled = useAiModeAccess('executive');
 
   const [preset, setPreset] = useState('today');
   const [custom, setCustom] = useState({ from: '', to: '' });
@@ -167,6 +171,8 @@ export default function AnalyticsPage() {
     } catch (e) { setAiError(e.message || 'Report generation failed.'); } finally { setAiBusy(''); }
   }
 
+  if (!operational) return <ReadOnlyNotice />;
+
   if (!analyticsLoaded) {
     return (
       <>
@@ -238,9 +244,9 @@ export default function AnalyticsPage() {
               <p className="card-sub">Your AI consultant explains what happened, why, and what to do — as a live presentation or a written report.</p>
             </div>
             <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
-              <button className="btn btn--primary" onClick={() => setPresentationOpen(true)}>
+              {premiumEnabled && <button className="btn btn--primary" onClick={() => setPresentationOpen(true)}>
                 <Presentation size={15} /> Launch Presentation
-              </button>
+              </button>}
               <button className="btn btn--secondary" onClick={runDeep} disabled={Boolean(aiBusy)}>
                 {aiBusy === 'deep' ? <span className="spinner" /> : <FileText size={15} />}
                 {aiBusy === 'deep' ? 'Building report…' : 'Written Report'}
@@ -433,7 +439,7 @@ export default function AnalyticsPage() {
         </>
       )}
 
-      {aiEnabled && presentationOpen && (
+      {premiumEnabled && presentationOpen && (
         <Suspense fallback={null}>
           <ExecutivePresentation open={presentationOpen} onClose={() => setPresentationOpen(false)} />
         </Suspense>

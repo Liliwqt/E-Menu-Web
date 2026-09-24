@@ -8,10 +8,9 @@
  * background jobs the LiveAnalystProvider runs on timers, which spend real money
  * against the model without anyone pressing a button.
  *
- * The backend does not cover for this. aiAnalystService verifies the Firebase ID
- * token before forwarding to OpenAI with the server-held key, but it verifies
- * that the caller is signed in, not what they are. So a staff token is a valid
- * AI token, and the only thing standing in the way is this decision.
+ * The backend independently verifies identity, branch membership, role, tier,
+ * and branch-wide allowance. This client check keeps unavailable controls out
+ * of sight and avoids requests the backend would reject.
  *
  * Kept as a pure function so both the check and its reasoning can be tested
  * without a browser, and kept in one place because five copies of a two-part

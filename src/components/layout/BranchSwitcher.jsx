@@ -113,7 +113,6 @@ export default function BranchSwitcher({ branchId, compact = false }) {
         currency: workspace.currency,
         timezone: workspace.timezone,
         operatingHours: workspace.operatingHours,
-        plan: workspace.plan,
       });
       setWorkspaceFromProps(updatedWorkspace);
       setShowAdd(false);

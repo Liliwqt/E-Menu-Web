@@ -1,13 +1,16 @@
-export const PLAN_FREE = 'free';
-export const PLAN_SUBSCRIPTION = 'subscription';
+export const PLAN_BASIC = 'basic';
+export const PLAN_STARTER = 'starter';
+export const PLAN_PREMIUM = 'premium';
+export const TRIAL_DURATION_MS = 14 * 24 * 60 * 60 * 1000;
 
-export const SUBSCRIPTION_STATUS = {
-  INACTIVE: 'inactive',
-  TRIALING: 'trialing',
-  ACTIVE: 'active',
-  PAST_DUE: 'past_due',
-  CANCELED: 'canceled',
-};
+export const PLAN_PRICE_PHP = Object.freeze({
+  [PLAN_BASIC]: 750,
+  [PLAN_STARTER]: 1100,
+  [PLAN_PREMIUM]: 1750,
+});
+export const AI_ALLOWANCE = Object.freeze({ [PLAN_STARTER]: 300, [PLAN_PREMIUM]: 1000 });
+
+export const SUBSCRIPTION_STATUS = { TRIALING: 'trialing', ACTIVE: 'active' };
 
 export const FEATURE = {
   AI_ANALYST: 'ai_analyst',
@@ -17,113 +20,78 @@ export const FEATURE = {
   AI_CHAT: 'ai_chat',
   SMART_RECOMMENDATIONS: 'smart_recommendations',
   DEEP_ANALYTICS: 'deep_analytics',
+  PERSISTENT_INSIGHTS: 'persistent_insights',
+  SIMULATION: 'simulation',
   TEAM_MEMBERS: 'team_members',
   MULTI_DEVICES: 'multi_devices',
   API_ACCESS: 'api_access',
   UNLIMITED_HISTORY: 'unlimited_history',
 };
 
-const AI_FEATURES = new Set([
-  FEATURE.AI_ANALYST,
-  FEATURE.AI_HANDOFF,
-  FEATURE.EXECUTIVE_PRESENTATION,
-  FEATURE.REVENUE_LEAK,
-  FEATURE.AI_CHAT,
-  FEATURE.SMART_RECOMMENDATIONS,
-  FEATURE.DEEP_ANALYTICS,
+const STARTER_FEATURES = new Set([
+  FEATURE.REVENUE_LEAK, FEATURE.AI_CHAT, FEATURE.SMART_RECOMMENDATIONS, FEATURE.DEEP_ANALYTICS,
+]);
+const PREMIUM_FEATURES = new Set([
+  FEATURE.AI_ANALYST, FEATURE.AI_HANDOFF, FEATURE.EXECUTIVE_PRESENTATION,
+  FEATURE.PERSISTENT_INSIGHTS, FEATURE.SIMULATION,
 ]);
 
-const SUBSCRIPTION_ONLY_FEATURES = new Set([
-  FEATURE.TEAM_MEMBERS,
-  FEATURE.MULTI_DEVICES,
-  FEATURE.API_ACCESS,
-  FEATURE.UNLIMITED_HISTORY,
-]);
-
-export function isSubscriptionActive(workspace) {
-  if (!workspace) return false;
-  if (workspace.plan !== PLAN_SUBSCRIPTION) return false;
-  if (workspace.subscriptionStatus === SUBSCRIPTION_STATUS.ACTIVE) return true;
-  if (workspace.subscriptionStatus === SUBSCRIPTION_STATUS.TRIALING) {
-    const trialEndsAt = Number(workspace.trialEndsAt || 0);
-    return trialEndsAt > Date.now();
-  }
-  return false;
+export function isSubscriptionActive(billing, now = Date.now()) {
+  return Boolean(billing
+    && Object.hasOwn(PLAN_PRICE_PHP, billing.plan)
+    && [SUBSCRIPTION_STATUS.ACTIVE, SUBSCRIPTION_STATUS.TRIALING].includes(billing.subscriptionStatus)
+    && Number(billing.periodEndAt) > now);
 }
 
-export function isAiEnabled(workspace) {
-  return isSubscriptionActive(workspace);
+export function isAiEnabled(billing, now = Date.now()) {
+  return isSubscriptionActive(billing, now) && billing.plan !== PLAN_BASIC;
 }
 
-export function hasFeature(workspace, feature) {
-  if (!workspace) return false;
-  if (AI_FEATURES.has(feature) || SUBSCRIPTION_ONLY_FEATURES.has(feature)) {
-    return isSubscriptionActive(workspace);
-  }
+export function hasFeature(billing, feature, now = Date.now()) {
+  if (!isSubscriptionActive(billing, now)) return false;
+  if (PREMIUM_FEATURES.has(feature)) return billing.plan === PLAN_PREMIUM;
+  if (STARTER_FEATURES.has(feature)) return billing.plan === PLAN_STARTER || billing.plan === PLAN_PREMIUM;
   return true;
 }
 
-export function isTrialEndingSoon(workspace, withinDays = 3) {
-  if (!workspace || workspace.plan !== PLAN_SUBSCRIPTION) return false;
-  if (workspace.subscriptionStatus !== SUBSCRIPTION_STATUS.TRIALING) return false;
-  const trialEndsAt = Number(workspace.trialEndsAt || 0);
-  if (!trialEndsAt) return false;
-  const daysRemaining = (trialEndsAt - Date.now()) / (1000 * 60 * 60 * 24);
-  return daysRemaining > 0 && daysRemaining <= withinDays;
+export const AI_MODE_FEATURE = Object.freeze({
+  opschat: FEATURE.AI_CHAT,
+  realtime: FEATURE.AI_CHAT,
+  leak: FEATURE.REVENUE_LEAK,
+  deep: FEATURE.DEEP_ANALYTICS,
+  live: FEATURE.AI_ANALYST,
+  briefing: FEATURE.AI_HANDOFF,
+  executive: FEATURE.EXECUTIVE_PRESENTATION,
+  simulation: FEATURE.SIMULATION,
+});
+
+export function canUseAiMode(billing, mode, now = Date.now()) {
+  return Boolean(AI_MODE_FEATURE[mode] && hasFeature(billing, AI_MODE_FEATURE[mode], now));
 }
 
-export function trialDaysRemaining(workspace) {
-  if (!workspace || workspace.plan !== PLAN_SUBSCRIPTION) return 0;
-  if (workspace.subscriptionStatus !== SUBSCRIPTION_STATUS.TRIALING) return 0;
-  const trialEndsAt = Number(workspace.trialEndsAt || 0);
-  if (!trialEndsAt) return 0;
-  const daysRemaining = Math.ceil((trialEndsAt - Date.now()) / (1000 * 60 * 60 * 24));
-  return Math.max(0, daysRemaining);
+export function isTrialEndingSoon(billing, withinDays = 3) {
+  if (billing?.subscriptionStatus !== SUBSCRIPTION_STATUS.TRIALING) return false;
+  const left = Number(billing.periodEndAt) - Date.now();
+  return left > 0 && left <= withinDays * 86400000;
+}
+
+export function trialDaysRemaining(billing) {
+  if (billing?.subscriptionStatus !== SUBSCRIPTION_STATUS.TRIALING) return 0;
+  return Math.max(0, Math.ceil((Number(billing.periodEndAt) - Date.now()) / 86400000));
 }
 
 export const FEATURE_METADATA = {
-  [FEATURE.AI_ANALYST]: {
-    label: 'AI Operations Analyst',
-    description: 'Live AI commentary that interprets your numbers',
-  },
-  [FEATURE.AI_HANDOFF]: {
-    label: 'AI Shift Handoff',
-    description: 'Daily briefing for incoming managers',
-  },
-  [FEATURE.EXECUTIVE_PRESENTATION]: {
-    label: 'Executive Presentation',
-    description: 'Board-meeting style report narrated by AI',
-  },
-  [FEATURE.REVENUE_LEAK]: {
-    label: 'Revenue Leak Detection',
-    description: 'AI surfaces likely missed revenue',
-  },
-  [FEATURE.AI_CHAT]: {
-    label: 'AI Chat Assistant',
-    description: 'Conversational ops analyst with memory',
-  },
-  [FEATURE.SMART_RECOMMENDATIONS]: {
-    label: 'Smart Recommendations',
-    description: 'Instant, evidence-backed action items',
-  },
-  [FEATURE.DEEP_ANALYTICS]: {
-    label: 'Deep Analytics',
-    description: 'Long-form AI reports with forecasting',
-  },
-  [FEATURE.TEAM_MEMBERS]: {
-    label: 'Team Members',
-    description: 'Add managers and staff to your branch',
-  },
-  [FEATURE.MULTI_DEVICES]: {
-    label: 'Multiple Devices',
-    description: 'Run more than one ordering device',
-  },
-  [FEATURE.API_ACCESS]: {
-    label: 'API Access',
-    description: 'Programmatic access to your data',
-  },
-  [FEATURE.UNLIMITED_HISTORY]: {
-    label: 'Unlimited History',
-    description: 'Keep full history beyond 30 days',
-  },
+  [FEATURE.AI_ANALYST]: { label: 'Live AI analyst', description: 'Proactive commentary on branch operations' },
+  [FEATURE.AI_HANDOFF]: { label: 'AI shift handoff', description: 'A briefing for the next manager' },
+  [FEATURE.EXECUTIVE_PRESENTATION]: { label: 'Executive presentation', description: 'AI-led business presentation' },
+  [FEATURE.REVENUE_LEAK]: { label: 'Revenue gap analysis', description: 'Potential missed revenue in recorded orders' },
+  [FEATURE.AI_CHAT]: { label: 'Operations AI assistant', description: 'Ask about this branch’s revenue' },
+  [FEATURE.SMART_RECOMMENDATIONS]: { label: 'Business suggestions', description: 'Actionable revenue suggestions' },
+  [FEATURE.DEEP_ANALYTICS]: { label: 'AI-written reports', description: 'Revenue trends and written analysis' },
+  [FEATURE.PERSISTENT_INSIGHTS]: { label: 'Branch insight memory', description: 'Dated, curated business findings' },
+  [FEATURE.SIMULATION]: { label: 'What-if simulations', description: 'Explore possible operational changes' },
+  [FEATURE.TEAM_MEMBERS]: { label: 'Team members', description: 'Managers and staff for your branch' },
+  [FEATURE.MULTI_DEVICES]: { label: 'Ordering devices', description: 'Manage registered devices' },
+  [FEATURE.API_ACCESS]: { label: 'API access', description: 'Programmatic access where supported' },
+  [FEATURE.UNLIMITED_HISTORY]: { label: 'Order history', description: 'Review recorded orders' },
 };

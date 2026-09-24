@@ -1,3 +1,5 @@
+import { useOperationalAccess } from '../hooks/useOperationalAccess';
+import ReadOnlyNotice from '../components/ui/ReadOnlyNotice';
 import { useMemo, useRef, useState } from 'react';
 import { ReceiptText, Trash2, Search, RotateCcw, Clock3 } from 'lucide-react';
 import ReadState from '../components/ui/ReadState';
@@ -30,12 +32,16 @@ function formatWhen(ts) {
 }
 
 function orderStatus(log) {
-  return String(log.status || log.paymentStatus || log.paymentMethod || 'Completed');
+  const status = String(log.paymentStatus || log.status || log.paymentMethod || 'Completed');
+  if (status === 'CUSTOMER_REPORTED_PAID') return 'QR payment reported · unverified';
+  if (status === 'PAY_AT_COUNTER') return 'Pay at counter · unverified';
+  return status;
 }
 
 function statusPillClass(status) {
   const s = status.toLowerCase();
   if (['cancelled', 'canceled', 'void', 'voided', 'refunded', 'deleted'].some((k) => s.includes(k))) return 'pill--danger';
+  if (s.includes('unverified')) return 'pill--neutral';
   if (['pending', 'preparing', 'processing', 'unpaid', 'queue'].some((k) => s.includes(k))) return 'pill--warning';
   return 'pill--success';
 }
@@ -71,7 +77,7 @@ function OrderDetail({ log, onClose, onDelete, canTrash, working, error }) {
         {(log.paymentMethod || log.paymentStatus || log.status) && (
           <div className="flex-between" style={{ fontSize: 'var(--text-sm)' }}>
             <span className="muted">Status</span>
-            <span className="pill pill--neutral">{log.paymentStatus || log.paymentMethod || log.status}</span>
+            <span className="pill pill--neutral">{orderStatus(log)}</span>
           </div>
         )}
         <div style={{ borderTop: '1px solid var(--border)', paddingTop: 'var(--sp-3)', display: 'grid', gap: 8 }}>
@@ -97,10 +103,11 @@ function OrderDetail({ log, onClose, onDelete, canTrash, working, error }) {
 export default function OrdersPage() {
   const { branchId, logs, logsLoaded, deletedLogs, logsResource, trashResource } = useBranchData();
   const { can } = useAuth();
+  const operational = useOperationalAccess();
   // Trashing is reversible (the order moves to the bin), so managers may do it.
   // Emptying the bin destroys the records outright, which stays with the owner.
-  const canTrash = can(CAP.TRASH_ORDER);
-  const canEmptyTrash = can(CAP.EMPTY_TRASH);
+  const canTrash = operational && can(CAP.TRASH_ORDER);
+  const canEmptyTrash = operational && can(CAP.EMPTY_TRASH);
   const [search, setSearch] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -158,6 +165,7 @@ export default function OrdersPage() {
 
   return (
     <>
+      <ReadOnlyNotice />
       {notice && <p role="status" className="notice">{notice}</p>}
       <div className="inv__toolbar rise">
         <div className="inv__search">

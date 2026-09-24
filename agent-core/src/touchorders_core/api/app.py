@@ -36,6 +36,7 @@ def create_app(
     *,
     gateway: LLMGateway | None = None,
     identity_verifier: IdentityVerifier | None = None,
+    entitlement_service = None,
 ) -> FastAPI:
     """Create the BFF application.
 
@@ -62,6 +63,7 @@ def create_app(
     )
     app.state.gateway = gateway
     app.state.identity_verifier = identity_verifier
+    app.state.entitlement_service = entitlement_service
     app.include_router(ai_router)
 
     @app.get("/health", response_model=HealthResponse, tags=["health"])
