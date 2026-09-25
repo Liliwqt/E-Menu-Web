@@ -1,5 +1,3 @@
-import { useOperationalAccess } from '../hooks/useOperationalAccess';
-import ReadOnlyNotice from '../components/ui/ReadOnlyNotice';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   UtensilsCrossed, Plus, Pencil, Trash2, Star, ImagePlus, FolderPlus,
@@ -24,7 +22,7 @@ function slugify(name) {
   return String(name).trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || `item_${Date.now()}`;
 }
 
-function ItemModal({ mode, branchId, category, itemKey, item, categories, onClose, canSave }) {
+function ItemModal({ mode, branchId, category, itemKey, item, categories, onClose }) {
   const [name, setName] = useState(item?.name || '');
   const [price, setPrice] = useState(item?.price ?? '');
   const [description, setDescription] = useState(item?.description || '');
@@ -69,7 +67,7 @@ function ItemModal({ mode, branchId, category, itemKey, item, categories, onClos
   }
 
   async function save() {
-    if (!canSave || saveLock.current) return;
+    if (saveLock.current) return;
     setError('');
     if (!name.trim()) { setError('Item name is required.'); return; }
     if (price === '' || Number.isNaN(Number(price))) { setError('Enter a valid base price.'); return; }
@@ -119,14 +117,13 @@ function ItemModal({ mode, branchId, category, itemKey, item, categories, onClos
       footer={
         <>
           <button className="btn btn--ghost" onClick={onClose} disabled={saving}>Cancel</button>
-          <button className="btn btn--primary" onClick={save} disabled={saving || !canSave}>
+          <button className="btn btn--primary" onClick={save} disabled={saving}>
             {saving ? <span className="spinner" style={{ borderTopColor: '#fff', borderColor: 'rgba(255,255,255,0.3)' }} /> : mode === 'add' ? 'Add item' : 'Save changes'}
           </button>
         </>
       }
     >
       {error && <div className="login__error" role="alert" style={{ marginBottom: 'var(--sp-4)' }}>{error}</div>}
-      {!canSave && <p role="status">This branch is read-only. The owner must renew before saving menu changes.</p>}
       <div style={{ display: 'grid', gap: 'var(--sp-4)' }}>
         <button
           type="button"
@@ -239,17 +236,16 @@ function ItemModal({ mode, branchId, category, itemKey, item, categories, onClos
 export default function MenuPage() {
   const { branchId } = useBranchData();
   const { can } = useAuth();
-  const operational = useOperationalAccess();
   // Menu structure is manager-and-above. Staff still reach this page to flip
   // availability, which is the one menu action their role allows.
-  const canEditMenu = operational && can(CAP.MANAGE_ITEMS);
-  const canDelete = operational && can(CAP.DELETE_MENU_ITEM);
+  const canEditMenu = can(CAP.MANAGE_ITEMS);
+  const canDelete = can(CAP.DELETE_MENU_ITEM);
   // Named per action rather than borrowing MANAGE_MENU for all of it, so the
   // matrix says what the buttons actually do. They resolve to the same tier
   // today; if that ever changes, this decides it instead of having to notice.
-  const canManageCategories = operational && can(CAP.MANAGE_MENU);
-  const canRenameCategory = operational && can(CAP.RENAME_CATEGORY);
-  const canDeleteCategory = operational && can(CAP.DELETE_CATEGORY);
+  const canManageCategories = can(CAP.MANAGE_MENU);
+  const canRenameCategory = can(CAP.RENAME_CATEGORY);
+  const canDeleteCategory = can(CAP.DELETE_CATEGORY);
   const [categories, setCategories] = useState([]);
   const [itemsByCategory, setItemsByCategory] = useState({});
   const [loaded, setLoaded] = useState(false);
@@ -260,7 +256,7 @@ export default function MenuPage() {
   const [availabilityFilter, setAvailabilityFilter] = useState('all');
   const [itemStates, setItemStates] = useState({});
   const pendingItems = useRef(new Set());
-  const canToggle = operational && can(CAP.TOGGLE_AVAILABILITY);
+  const canToggle = can(CAP.TOGGLE_AVAILABILITY);
   const [collapsed, setCollapsed] = useState({});
   const [newCategory, setNewCategory] = useState('');
   const [busy, setBusy] = useState('');
@@ -312,7 +308,7 @@ export default function MenuPage() {
   // there and wonder which screen is lying.
   const actionLock = useRef(false);
   async function run(label, fn) {
-    if (!operational || actionLock.current) return;
+    if (actionLock.current) return;
     actionLock.current = true;
     setBusy(label);
     setError('');
@@ -373,7 +369,6 @@ export default function MenuPage() {
 
   return (
     <>
-      <ReadOnlyNotice />
       <div className="flex-between rise" style={{ marginBottom: 'var(--sp-5)', flexWrap: 'wrap' }}>
         <p className="card-sub" style={{ margin: 0 }}>
           {categories.length} categories · {totalItems} items. Availability syncs automatically with inventory stock.
@@ -599,7 +594,6 @@ export default function MenuPage() {
           itemKey={modal.itemKey}
           item={modal.item}
           categories={categories}
-          canSave={canEditMenu}
           onClose={() => setModal(null)}
         />
       )}
@@ -626,7 +620,7 @@ export default function MenuPage() {
                 setConfirmDelete(null);
                 return result;
               })}
-              disabled={busy === 'delete' || !operational}
+              disabled={busy === 'delete'}
             >
               {busy === 'delete' ? 'Deleting…' : 'Delete permanently'}
             </button>
