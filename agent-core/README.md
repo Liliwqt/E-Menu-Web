@@ -1,29 +1,38 @@
 # TouchOrders Agent Core
 
-The TouchOrders Agent Core is the Python backend for deterministic restaurant operations
-monitoring, human-approved workflows, and schema-constrained AI reasoning.
+FastAPI serves authenticated Android checkout and the branch AI API. Firebase
+Realtime Database is the operational store; order totals and stock changes are
+calculated on the server.
 
-It follows the architectural principle: **a deterministic core with AI at the edges**.
-Business calculations, thresholding, workflows, and effects remain deterministic Python.
-Future LLM access is centralized in `touchorders_core.llm.gateway`.
-
-## Stage 0: run locally
+## Run locally
 
 ```bash
 cd agent-core
 python -m pip install -e '.[dev]'
-touchorders-agent-core
+uvicorn --app-dir src touchorders_core.main:app --reload
+pytest
 ```
 
-The liveness endpoint is available at `GET /health`; interactive OpenAPI docs are at `/docs`.
+The service uses `FIREBASE_SERVICE_ACCOUNT_JSON` and `FIREBASE_DATABASE_URL` on
+Railway. Keep the service-account JSON in Railway Variables, never in Git.
+`OPENAI_API_KEY` enables AI; orders can start and pass readiness without it.
 
-Run the Stage 0 checks:
+`GET /health` checks process liveness. `GET /health/orders` verifies Firebase
+identity setup and makes a real, read-only database probe. `GET /health/ready`
+reports Firebase and AI wiring separately.
+
+`POST /api/orders` requires `Authorization: Bearer <Firebase ID token>` from an
+enrolled Android device. The body contains `companyId`, `branchId`, a stable
+UUID `orderId`, `customerName`, `paymentMethod` (`QR_CODE` or `COUNTER`),
+`expectedTotal`, and `items` with `categoryId`, `itemId`, `size`,
+`quantity`, and `expectedUnitPrice`. The server checks the current menu and
+entitlement and atomically writes the order with tracked stock decrements.
+Retry an uncertain submission with the same order ID.
+
+Run the database emulator transaction check from the Android
+`firebase-tests` directory:
 
 ```bash
-pytest
-lint-imports
-alembic upgrade head
+firebase emulators:exec --project demo-menu-kiosk --only database \
+  'cd "../../AI-Operations-Management-Platform-main/agent-core" && .venv/bin/python -m pytest -q tests/integration/test_orders_emulator.py'
 ```
-
-`alembic upgrade head` creates only the Alembic version marker at this stage. Domain tables
-arrive in Stage 1.

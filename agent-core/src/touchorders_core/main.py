@@ -13,6 +13,7 @@ import uvicorn
 from touchorders_core.api.app import create_app
 from touchorders_core.api.auth import FirebaseIdentityVerifier
 from touchorders_core.api.entitlements import FirebaseEntitlementService
+from touchorders_core.api.orders import FirebaseOrderService
 from touchorders_core.domain.enums import AgentName
 from touchorders_core.llm.budget import BudgetTracker, DailyBudget
 from touchorders_core.llm.gateway import LLMGateway, OpenAIClient
@@ -38,11 +39,6 @@ def build_app(settings: Settings | None = None):
     openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
 
     if settings.environment in ("production", "staging"):
-        if not openai_key:
-            raise RuntimeError(
-                f"Required environment variable missing for {settings.environment}: OPENAI_API_KEY. "
-                "Set it in Railway Variables or the local .env file."
-            )
         if not settings.cors_allow_origins or settings.cors_allow_origins == "*":
             logger.warning("cors_origins_wildcard", detail="TOUCHORDERS_CORS_ORIGINS is '*'; restrict to exact origins in production")
 
@@ -65,13 +61,15 @@ def build_app(settings: Settings | None = None):
         logger.warning("firebase_verifier_unconfigured", error=str(exc))
 
     entitlement_service = None
+    order_service = None
     if verifier and os.environ.get("FIREBASE_DATABASE_URL"):
         from firebase_admin import db
         entitlement_service = FirebaseEntitlementService(db)
+        order_service = FirebaseOrderService(db)
     else:
         logger.warning("billing_database_unconfigured", detail="AI requests disabled until FIREBASE_DATABASE_URL is set")
     return create_app(settings, gateway=gateway, identity_verifier=verifier,
-                      entitlement_service=entitlement_service)
+                      entitlement_service=entitlement_service, order_service=order_service)
 
 
 app = build_app()

@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from touchorders_core import __version__
 from touchorders_core.api.auth import IdentityVerifier
 from touchorders_core.api.routes.ai import router as ai_router
+from touchorders_core.api.routes.orders import router as orders_router
 from touchorders_core.llm.gateway import LLMGateway
 from touchorders_core.observability.logging import configure_logging, get_logger
 from touchorders_core.settings import Settings, get_settings
@@ -37,6 +39,7 @@ def create_app(
     gateway: LLMGateway | None = None,
     identity_verifier: IdentityVerifier | None = None,
     entitlement_service = None,
+    order_service = None,
 ) -> FastAPI:
     """Create the BFF application.
 
@@ -64,7 +67,9 @@ def create_app(
     app.state.gateway = gateway
     app.state.identity_verifier = identity_verifier
     app.state.entitlement_service = entitlement_service
+    app.state.order_service = order_service
     app.include_router(ai_router)
+    app.include_router(orders_router)
 
     @app.get("/health", response_model=HealthResponse, tags=["health"])
     async def health() -> HealthResponse:
@@ -81,8 +86,8 @@ def create_app(
     @app.get("/health/ready", response_model=ReadinessResponse, tags=["health"])
     async def readiness() -> ReadinessResponse:
         """Report dependency wiring: 'ok' = wired, 'unconfigured' = credentials absent.
-        Statuses reflect composition, never secret values. There is deliberately no database
-        status — this service persists nothing."""
+        Statuses reflect composition, never secret values. Order readiness is
+        checked separately at /health/orders."""
 
         firebase = "ok" if identity_verifier is not None else "unconfigured"
         openai_status = "ok" if gateway is not None else "unconfigured"
@@ -92,5 +97,15 @@ def create_app(
             firebase=firebase,
             openai=openai_status,
         )
+
+    @app.get("/health/orders", tags=["health"])
+    async def order_readiness() -> dict[str, str]:
+        if identity_verifier is None or order_service is None:
+            raise HTTPException(503, "Order service is unconfigured")
+        try:
+            await run_in_threadpool(order_service.ready)
+        except Exception as exc:
+            raise HTTPException(503, "Order database is unavailable") from exc
+        return {"status": "healthy", "firebase": "ok", "database": "ok"}
 
     return app
