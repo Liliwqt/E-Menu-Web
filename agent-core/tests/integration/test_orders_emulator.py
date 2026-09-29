@@ -46,12 +46,12 @@ def test_atomic_checkout_against_database_emulator():
         })
         service = FirebaseOrderService(db)
 
-        def submit(order_id):
+        def submit(order_id, *, price=110, total=110):
             body = OrderRequest(
                 companyId=company, branchId=branch, orderId=order_id,
-                customerName="Guest", paymentMethod="QR_CODE", expectedTotal=110,
+                customerName="Guest", paymentMethod="QR_CODE", expectedTotal=total,
                 items=[{"categoryId": "Drinks", "itemId": "coffee", "size": "Medium",
-                        "quantity": 1, "expectedUnitPrice": 110}],
+                        "quantity": 1, "expectedUnitPrice": price}],
             )
             try:
                 return service.submit(uid=uid, body=body)
@@ -70,9 +70,36 @@ def test_atomic_checkout_against_database_emulator():
         assert after["inventory"]["Drinks"]["coffee"]["sizes"]["Medium"]["stock"] == 0
         assert len(after["logs"]) == 1
 
-        entitlement_ref.update({"periodEndAt": 0})
+        # A rejected request must leave both the ledger and stock intact.
+        baseline = branch_ref.get()
+        assert submit(uuid4(), price=100, total=100) == 409
+        assert submit(uuid4()) == 409  # stock exhausted
+        assert branch_ref.get() == baseline
+
+        branch_ref.child("inventory/Drinks/coffee/sizes/Medium/stock").set(1)
+        branch_ref.child("categories/Drinks/coffee/available").set(False)
+        baseline = branch_ref.get()
+        assert submit(uuid4()) == 409
+        assert branch_ref.get() == baseline
+        branch_ref.child("categories/Drinks/coffee/available").set(True)
+
+        pointer_ref.update({"isActive": False})
+        baseline = branch_ref.get()
         assert submit(uuid4()) == 403
-        assert branch_ref.get() == after
+        assert branch_ref.get() == baseline
+        pointer_ref.update({"isActive": True, "branchId": "branch-other"})
+        assert submit(uuid4()) == 403
+        pointer_ref.update({"branchId": branch})
+        branch_ref.child(f"kiosks/{uid}/isActive").set(False)
+        baseline = branch_ref.get()
+        assert submit(uuid4()) == 403
+        assert branch_ref.get() == baseline
+        branch_ref.child(f"kiosks/{uid}/isActive").set(True)
+
+        entitlement_ref.update({"periodEndAt": 0})
+        baseline = branch_ref.get()
+        assert submit(uuid4()) == 403
+        assert branch_ref.get() == baseline
     finally:
         company_ref.delete()
         pointer_ref.delete()
