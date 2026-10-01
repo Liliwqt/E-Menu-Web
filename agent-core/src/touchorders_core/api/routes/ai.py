@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 from touchorders_core.api.auth import IdentityError, IdentityVerifier, VerifiedIdentity
 from touchorders_core.domain.enums import AgentName
 from touchorders_core.llm.budget import BudgetExceeded, LLMUnavailable
-from touchorders_core.llm.gateway import LLMGateway
+from touchorders_core.llm.gateway import LLMGateway, describe_transport_failure
 from touchorders_core.observability.logging import get_logger
 
 logger = get_logger(__name__)
@@ -132,6 +132,7 @@ async def chat_completions(
         # operator. Reporting them all as "AI generation failed" is what made an expired
         # session, a spent account and a wrong key indistinguishable from the browser.
         logger.error("ai_generation_failed", error_type=type(exc).__name__, error=str(exc),
+                     transport_failure=describe_transport_failure(exc),
                      model=model, uid=identity.uid, company=body.companyId,
                      branch=body.branchId, mode=body.mode,
                      api_base_url=getattr(gateway, "openai_base_url", None))

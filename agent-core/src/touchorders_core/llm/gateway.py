@@ -41,6 +41,40 @@ class OutputRejected(RuntimeError):
     """A response failed schema or post-validation after the single corrective re-prompt (§14.4)."""
 
 
+def describe_transport_failure(exc: BaseException, *, max_depth: int = 6) -> str:
+    """Name the reason a connection actually failed, not just that it did.
+
+    ``openai.APIConnectionError`` carries the string ``"Connection error."`` in
+    ``str(exc)`` for *every* underlying fault, because the SDK collapses them. The
+    real reason lives in the chained cause — an ``httpx.ConnectError`` wrapping an
+    ``OSError`` — and it is the difference between "network is unreachable"
+    (no egress at all), "name resolution failed" (DNS), and "connection refused"
+    (something is listening and saying no). Those need different fixes, and a log
+    reading only ``str(exc)`` reports the same line for all three.
+
+    Walks ``__cause__``/``__context__`` and returns the deepest meaningful message,
+    prefixed with the exception types so the chain is readable.
+    """
+    parts: list[str] = []
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    depth = 0
+    while current is not None and depth < max_depth and id(current) not in seen:
+        seen.add(id(current))
+        message = str(current).strip()
+        # "Connection error." on its own says nothing, so keep the type for context
+        # but do not let it be the reason.
+        parts.append(f"{type(current).__name__}: {message}" if message else type(current).__name__)
+        nxt = current.__cause__ or current.__context__
+        # Only follow an explicit cause chain; implicit context can be unrelated.
+        if current.__cause__ is None and current.__context__ is not None:
+            current = current.__context__ if depth == 0 else None
+        else:
+            current = nxt
+        depth += 1
+    return " <- ".join(parts)
+
+
 @dataclass
 class ToolCall:
     id: str
