@@ -26,8 +26,8 @@ test('completed details pass while placeholders and bad contact emails fail', ()
 
 test('approval alone cannot bypass known missing policy functionality', () => {
   const issues = publicationIssues({ ...PUBLICATION, status: 'approved', reviewedAt: '2026-10-01' });
-  assert.ok(issues.includes('Activity tracking, email/in-app warnings, complete export and deletion are unimplemented'));
-  assert.ok(issues.includes('Complete physical address and provider acceptance are unresolved'));
+  assert.ok(issues.includes('Gmail delivery, private storage and scheduled lifecycle processing require configuration and verification'));
+  assert.ok(issues.includes('PayMongo acceptance of operator identity and address is unverified'));
   assert.ok(publicationIssues({ ...PUBLICATION, releaseBlockers: undefined }).includes('Publication blockers have not been reviewed'));
 });
 

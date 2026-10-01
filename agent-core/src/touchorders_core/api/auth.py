@@ -20,6 +20,7 @@ class IdentityError(Exception):
 class VerifiedIdentity:
     uid: str
     email: str | None = None
+    auth_time: int | None = None
 
 
 class IdentityVerifier(Protocol):
@@ -64,7 +65,7 @@ class FirebaseIdentityVerifier:
         from firebase_admin import auth
 
         try:
-            decoded = auth.verify_id_token(id_token)
+            decoded = auth.verify_id_token(id_token, check_revoked=True)
         except Exception as exc:  # noqa: BLE001 - normalize any SDK error to IdentityError
             raise IdentityError(str(exc)) from exc
-        return VerifiedIdentity(uid=decoded["uid"], email=decoded.get("email"))
+        return VerifiedIdentity(uid=decoded["uid"], email=decoded.get("email"), auth_time=decoded.get("auth_time"))

@@ -202,6 +202,12 @@ def test_http_requires_bearer_token_and_reports_order_readiness():
         assert client.post("/api/orders", json=request().model_dump(mode="json")).status_code == 401
         assert client.post("/api/orders", headers={"Authorization": "Bearer invalid"},
                            json=request().model_dump(mode="json")).status_code == 401
+        legacy_qr = request().model_dump(mode="json")
+        legacy_qr["orderId"] = str(legacy_qr["orderId"])
+        legacy_qr["paymentMethod"] = "QR_CODE"
+        before = copy.deepcopy(db.data)
+        assert client.post("/api/orders", headers={"Authorization": "Bearer valid"}, json=legacy_qr).status_code == 422
+        assert db.data == before
         response = client.post("/api/orders", headers={"Authorization": "Bearer valid"},
                                json=request().model_dump(mode="json"))
         assert response.status_code == 200

@@ -52,6 +52,7 @@ const ReportsPage = lazyPage(() => import('./pages/ReportsPage'));
 const HistoryPage = lazyPage(() => import('./pages/HistoryPage'));
 const DevicesPage = lazyPage(() => import('./pages/DevicesPage'));
 const SubscriptionPage = lazyPage(() => import('./pages/SubscriptionPage'));
+const PaymentSettingsPage = lazyPage(() => import('./pages/PaymentSettingsPage'));
 const TeamPage = lazyPage(() => import('./pages/TeamPage'));
 
 function FullScreenLoader() {
@@ -241,6 +242,7 @@ export default function App() {
         <Route path="/team/:branchId" element={branchRoute(TeamPage, CAP.MANAGE_STAFF)} />
         {/* Members can read the branch plan; SubscriptionPage gates changes to the owner. */}
         <Route path="/subscription/:branchId" element={branchRoute(SubscriptionPage)} />
+        <Route path="/payments/:branchId" element={branchRoute(PaymentSettingsPage, CAP.MANAGE_BILLING)} />
         <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

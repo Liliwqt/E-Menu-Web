@@ -36,3 +36,39 @@ Run the database emulator transaction check from the Android
 firebase emulators:exec --project demo-menu-kiosk --only database \
   'cd "../../AI-Operations-Management-Platform-main/agent-core" && .venv/bin/python -m pytest -q tests/integration/test_orders_emulator.py'
 ```
+
+## Verified QR Ph
+
+QR Ph checkout is fail-closed. `POST /api/orders` accepts Pay at Counter only;
+QR orders use `/api/payments/qrph/checkouts` and are written to the order ledger
+only after PayMongo reports a successful payment. The server reserves stock for
+five minutes, restores it once on cancellation/failure/expiry, and treats the
+stable order UUID as its retry key. QR image payloads, merchant credentials,
+provider indexes, webhook receipts, and refund audits are Admin-only database
+records.
+
+Railway needs `PAYMONGO_SECRET_KEY` and
+`PAYMONGO_LINKED_ACCOUNTS_ENABLED=true` in addition to working Firebase Admin
+credentials. Leave the flag `false` until the parent account is active, its current Terms
+have been accepted, the relationship grants transaction access, and the rollout
+has passed test-mode verification. `/health/payments` verifies Firebase access and the
+PayMongo gateway configuration without exposing a secret.
+
+After PayMongo verifies a business and issues its linked `Account-ID`, configure
+it with the private operator command (run from a trusted machine, never from the
+web client):
+
+```bash
+FIREBASE_DATABASE_URL=... FIREBASE_SERVICE_ACCOUNT_JSON='...' \
+python scripts/configure_paymongo_merchant.py \
+  --company company-example --account-id org_example \
+  --webhook-secret whsec_example_value --email owner@example.com \
+  --operator operator@example.com
+```
+
+The command prints a `webhookPath`. Prefix it with the public Railway origin and
+register that exact HTTPS URL in PayMongo. Do not paste the secret into Firebase
+Hosting or Android configuration. Use PayMongo test mode and isolated branch data
+before enabling a real merchant. Owners can view connection status and submit a
+full refund from the portal; managers, staff, and devices cannot read payment
+credentials or provider records.

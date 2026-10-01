@@ -9,6 +9,7 @@ description = "Deterministic, auditable agent core for TouchOrders restaurant op
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
 dependencies = [
+  "cryptography>=43,<50",
   "fastapi>=0.115,<1",
   "firebase-admin>=6.5,<7",
   "openai>=1.0,<3",

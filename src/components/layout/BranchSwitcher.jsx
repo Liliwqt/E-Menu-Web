@@ -214,10 +214,10 @@ export default function BranchSwitcher({ branchId, compact = false }) {
             <button type="button" className="branch-switcher__close" onClick={closeDelete} aria-label="Close" disabled={deleteWorking}>
               <X size={18} />
             </button>
-            <h2 id="delete-branch-title">Delete <span className="branch-switcher__deleteName">{deleteBranch.name}</span>?</h2>
+            <h2 id="delete-branch-title">Close <span className="branch-switcher__deleteName">{deleteBranch.name}</span>?</h2>
             <p className="branch-switcher__dangerNote">
-              This <strong>permanently deletes</strong> this branch and all of its data
-              (menu, orders, inventory, settings, and device enrollment). This cannot be undone.
+              This <strong>stops new writes</strong> for this branch and schedules deletion after 30 days. Export or recover before that deadline. This includes its data
+              (menu, orders, inventory, settings, and device enrollment). Recovery is available before deletion begins.
             </p>
             <form onSubmit={confirmDelete}>
               <label>
@@ -237,7 +237,7 @@ export default function BranchSwitcher({ branchId, compact = false }) {
                   Cancel
                 </button>
                 <button type="submit" className="btn btn--danger" disabled={deleteWorking || !deletePassword}>
-                  {deleteWorking ? 'Deleting…' : 'Delete branch'}
+                  {deleteWorking ? 'Scheduling…' : 'Schedule closure'}
                 </button>
               </div>
             </form>

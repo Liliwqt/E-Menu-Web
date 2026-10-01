@@ -34,6 +34,9 @@ function formatWhen(ts) {
 function orderStatus(log) {
   const status = String(log.paymentStatus || log.status || log.paymentMethod || 'Completed');
   if (status === 'CUSTOMER_REPORTED_PAID') return 'QR payment reported · unverified';
+  if (status === 'PAID_CONFIRMED') return 'QR Ph payment · confirmed';
+  if (status === 'REFUND_PENDING') return 'QR Ph refund · pending';
+  if (status === 'REFUNDED') return 'QR Ph payment · refunded';
   if (status === 'PAY_AT_COUNTER') return 'Pay at counter · unverified';
   return status;
 }

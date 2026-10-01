@@ -342,7 +342,7 @@ export function AuthProvider({ children }) {
 
   /**
    * Sensitive operation: re-authenticates the user with their password, then
-   * permanently deletes the given branch. Returns the updated workspace.
+   * schedules branch closure with a 30-day recovery period. Returns the workspace.
    */
   const deleteBranchWithPassword = useCallback(
     async (branchId, password) => {

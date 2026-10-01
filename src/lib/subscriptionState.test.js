@@ -56,3 +56,9 @@ test('subscription consumers use protected entitlement and provider wraps AI sch
   assert.match(provider,/billingEntitlements\/\$\{companyId\}\/\$\{branchId\}/);
   assert.match(provider,/state\?\.key === key/);
 });
+test('cancelled subscription remains readable and never grants access', () => {
+  const h = harness(); h.next({ ...trial, subscriptionStatus: 'cancelled' });
+  assert.equal(h.states.at(-1).status, 'ready');
+  assert.equal(hasFeature(h.states.at(-1).billing, FEATURE.MULTI_DEVICES, 150), false);
+  assert.equal(canUseAiMode(h.states.at(-1).billing, 'opschat', 150), false);
+});

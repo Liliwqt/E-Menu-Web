@@ -82,6 +82,7 @@ def activate(db, *, company: str, branch: str, plan: str, reference: str,
         # Payment, entitlement and claim are one server-authorized RTDB update.
         db.reference().update({
             f"billingEntitlements/{company}/{branch}": entitlement,
+            f"{company}/branches/{branch}/lifecycle/billingBlocked": False,
             f"subscriptionPayments/{company}/{branch}/{key}": payment,
             f"subscriptionPaymentRefs/{key}/state": "processed",
         })

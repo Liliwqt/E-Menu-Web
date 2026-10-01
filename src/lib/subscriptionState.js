@@ -19,7 +19,7 @@ export function watchSubscription({ listen, emit, now = Date.now, schedule = set
     clear();
     if (!entitlement
         || !Object.hasOwn(PLAN_PRICE_PHP, entitlement.plan)
-        || !['trialing', 'active'].includes(entitlement.subscriptionStatus)
+        || !['trialing', 'active', 'cancelled', 'inactive'].includes(entitlement.subscriptionStatus)
         || !Number.isFinite(Number(entitlement.periodEndAt))) {
       emit({ status: 'error', billing: null });
       return;

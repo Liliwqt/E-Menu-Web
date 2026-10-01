@@ -1,85 +1,129 @@
 {
   "rules": {
-    // RULES_VERSION: branch-checkout-v4 (2026-09-29) — two-step onboarding supported.
-    // Verify this marker in Firebase Console > Realtime Database > Rules to confirm
-    // the deployed version matches this file.
+    // RULES_VERSION: lifecycle-v1 (2026-10-01). Admin-only lifecycle; direct branch deletion denied.
     "users": {
       "$uid": {
         ".read": "auth != null && auth.uid == $uid",
-        ".write": "auth != null && auth.uid == $uid",
-        "email": { ".validate": "newData.isString() && newData.val().length <= 160" },
-        "displayName": { ".validate": "newData.isString() && newData.val().length <= 80" },
-        "photoURL": { ".validate": "newData.isString() && newData.val().length <= 500" },
-        "provider": { ".validate": "newData.isString() && (newData.val() == 'google' || newData.val() == 'password')" },
+        ".write": "(auth != null && auth.uid == $uid) && (root.child('lifecycleMaintenance').child('enabled').val() != true)",
+        "email": {
+          ".validate": "newData.isString() && newData.val().length <= 160"
+        },
+        "displayName": {
+          ".validate": "newData.isString() && newData.val().length <= 80"
+        },
+        "photoURL": {
+          ".validate": "newData.isString() && newData.val().length <= 500"
+        },
+        "provider": {
+          ".validate": "newData.isString() && (newData.val() == 'google' || newData.val() == 'password')"
+        },
         "workspace": {
           ".validate": "newData.hasChildren(['branchId', 'onboardingComplete']) && newData.child('branchId').isString() && newData.child('branchId').val().matches(/^branch-[a-z0-9-]+$/) && (!newData.hasChild('plan') || newData.child('plan').val() == 'free' || newData.child('plan').val() == 'subscription' || newData.child('plan').val() == 'starter') && newData.child('onboardingComplete').isBoolean()"
         },
         "kiosks": {
           "$kioskUid": {
             ".read": "auth != null && auth.uid == $uid",
-            ".write": "auth != null && auth.uid == $uid",
+            ".write": "(auth != null && auth.uid == $uid) && (root.child('lifecycleMaintenance').child('enabled').val() != true)",
             ".validate": "newData.hasChildren(['kioskUid', 'name', 'registeredAt']) && newData.child('kioskUid').val() == $kioskUid && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 60 && newData.child('registeredAt').isNumber()",
-            "kioskUid": { ".validate": "newData.isString() && newData.val() == $kioskUid" },
-            "name": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60" },
-            "registeredAt": { ".validate": "newData.isNumber()" },
-            "lastActiveAt": { ".validate": "newData.isNumber()" },
-            "isActive": { ".validate": "newData.isBoolean()" },
-            "$other": { ".validate": false }
+            "kioskUid": {
+              ".validate": "newData.isString() && newData.val() == $kioskUid"
+            },
+            "name": {
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60"
+            },
+            "registeredAt": {
+              ".validate": "newData.isNumber()"
+            },
+            "lastActiveAt": {
+              ".validate": "newData.isNumber()"
+            },
+            "isActive": {
+              ".validate": "newData.isBoolean()"
+            },
+            "$other": {
+              ".validate": false
+            }
           }
         },
-        "role": { ".validate": "newData.isString() && (newData.val() == 'owner' || newData.val() == 'manager' || newData.val() == 'staff')" },
-        "createdAt": { ".validate": "newData.isNumber()" },
-        "updatedAt": { ".validate": "newData.isNumber()" },
-        "$other": { ".validate": false }
+        "role": {
+          ".validate": "newData.isString() && (newData.val() == 'owner' || newData.val() == 'manager' || newData.val() == 'staff')"
+        },
+        "createdAt": {
+          ".validate": "newData.isNumber()"
+        },
+        "updatedAt": {
+          ".validate": "newData.isNumber()"
+        },
+        "$other": {
+          ".validate": false
+        }
       }
     },
     "accounts": {
       "$uid": {
         ".read": "auth != null && auth.uid == $uid",
-        // Normally a user owns this record. It is the one place a company owner
-        // (and, for staff only, a branch manager) may write on someone else's
-        // behalf so a provisioned account can resolve its company on first login.
-        // Value is derived from newData, so it cannot be used to reach a company
-        // the writer has no standing in.
-        //
-        // A member may still maintain their own row, but only once it exists and
-        // only without changing its role. `role` is what loadAccessContext() feeds
-        // to resolveRole(), so a self-write able to raise it would hand a signed-in
-        // account the manager UI on the strength of its own record alone.
-        //
-        // Deleting is the one write where newData is empty, and every other clause
-        // here reads its companyId from newData. That made an owner's delete fail
-        // outright — not because the clause was missing, but because the earlier
-        // clauses had nothing to look up and the whole rule fell over before the
-        // delete case was reached. So the two cases are separated below: a delete
-        // is judged from the record being deleted, and everything else from the
-        // record being written. Each clause reads only a node that exists.
-        //
-        // Without this, removing a team member left the person's account row
-        // behind, still carrying a role for a company they had been taken out of,
-        // and their next sign-in was offered a business to set up instead of a
-        // plain sign-in screen.
-        ".write": "auth != null && (!newData.exists() && (root.child(data.child('companyId').val()).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || (data.child('role').val() == 'staff' && root.child(data.child('companyId').val()).child('users').child(auth.uid).child('companyRole').val() == 'manager')) || newData.exists() && (root.child(newData.child('companyId').val()).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || (newData.child('role').val() == 'staff' && root.child(newData.child('companyId').val()).child('users').child(auth.uid).child('companyRole').val() == 'manager') || (auth.uid == $uid && data.exists() && newData.child('role').val() == data.child('role').val())))",
-        // `role` is optional so records written before the role model existed still
-        // validate on their next update. When present it must be a known role.
+        ".write": "(auth != null && (!newData.exists() && (root.child(data.child('companyId').val()).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || (data.child('role').val() == 'staff' && root.child(data.child('companyId').val()).child('users').child(auth.uid).child('companyRole').val() == 'manager')) || newData.exists() && (root.child(newData.child('companyId').val()).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || (newData.child('role').val() == 'staff' && root.child(newData.child('companyId').val()).child('users').child(auth.uid).child('companyRole').val() == 'manager') || (auth.uid == $uid && data.exists() && newData.child('role').val() == data.child('role').val())))) && (root.child('lifecycleMaintenance').child('enabled').val() != true)",
         ".validate": "newData.hasChildren(['uid', 'companyId', 'activeBranchId']) && newData.child('uid').val() == $uid && newData.child('companyId').isString() && newData.child('companyId').val().matches(/^company-[a-z0-9-]+$/) && newData.child('activeBranchId').isString() && (!newData.hasChild('role') || newData.child('role').val() == 'owner' || newData.child('role').val() == 'manager' || newData.child('role').val() == 'staff')"
       }
     },
-    // Root kiosk index: a tiny per-device record used ONLY for self-discovery by
-    // unprovisioned kiosks (which cannot read inside a company they don't know yet).
-    // The full enrollment record lives under $companyId/kioskEnrollments/{kioskUid}.
     "kioskEnrollments": {
       "$kioskUid": {
         ".read": "auth != null && auth.uid == $kioskUid",
-        ".write": "auth != null && newData.child('companyId').isString() && newData.child('branchId').isString() && (root.child(newData.child('companyId').val()).child('branches').child(newData.child('branchId').val()).child('branchProfile').child('ownerUid').val() == auth.uid || root.child(newData.child('companyId').val()).child('branches').child(newData.child('branchId').val()).child('branchProfile').child('managerUid').val() == auth.uid) && (root.child('billingEntitlements').child(newData.child('companyId').val()).child(newData.child('branchId').val()).child('periodEndAt').val() > now && (root.child('billingEntitlements').child(newData.child('companyId').val()).child(newData.child('branchId').val()).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child(newData.child('companyId').val()).child(newData.child('branchId').val()).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child(newData.child('companyId').val()).child(newData.child('branchId').val()).child('plan').val() == 'basic' || root.child('billingEntitlements').child(newData.child('companyId').val()).child(newData.child('branchId').val()).child('plan').val() == 'starter' || root.child('billingEntitlements').child(newData.child('companyId').val()).child(newData.child('branchId').val()).child('plan').val() == 'premium'))",
+        ".write": "(auth != null && newData.child('companyId').isString() && newData.child('branchId').isString() && (root.child(newData.child('companyId').val()).child('branches').child(newData.child('branchId').val()).child('branchProfile').child('ownerUid').val() == auth.uid || root.child(newData.child('companyId').val()).child('branches').child(newData.child('branchId').val()).child('branchProfile').child('managerUid').val() == auth.uid) && (root.child('billingEntitlements').child(newData.child('companyId').val()).child(newData.child('branchId').val()).child('periodEndAt').val() > now && (root.child('billingEntitlements').child(newData.child('companyId').val()).child(newData.child('branchId').val()).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child(newData.child('companyId').val()).child(newData.child('branchId').val()).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child(newData.child('companyId').val()).child(newData.child('branchId').val()).child('plan').val() == 'basic' || root.child('billingEntitlements').child(newData.child('companyId').val()).child(newData.child('branchId').val()).child('plan').val() == 'starter' || root.child('billingEntitlements').child(newData.child('companyId').val()).child(newData.child('branchId').val()).child('plan').val() == 'premium'))) && (root.child('lifecycleMaintenance').child('enabled').val() != true) && root.child(newData.child(\"companyId\").val()).child(\"branches\").child(newData.child(\"branchId\").val()).child(\"lifecycle\").child(\"status\").val() != \"closing\" && root.child(newData.child('companyId').val()).child('branches').child(newData.child('branchId').val()).child('lifecycle').child('status').val() != 'deleting' && !root.child('deletionTombstones').child(newData.child('companyId').val()).child(newData.child('branchId').val()).exists()",
         ".validate": "newData.hasChildren(['companyId', 'branchId', 'isActive']) && !newData.hasChild('kioskUid') && newData.child('companyId').val().matches(/^company-[a-z0-9-]+$/) && newData.child('branchId').val().matches(/^branch-[a-z0-9-]+$/) && newData.child('isActive').isBoolean()"
+      }
+    },
+    "paymentMerchantConnections": {
+      "$companyId": {
+        ".read": false,
+        ".write": false
+      }
+    },
+    "paymentIntentIndex": {
+      "$intentId": {
+        ".read": false,
+        ".write": false
+      }
+    },
+    "paymentReservationIndex": {
+      "$orderId": {
+        ".read": false,
+        ".write": false
+      }
+    },
+    "paymentCheckoutSecrets": {
+      "$orderId": {
+        ".read": false,
+        ".write": false
+      }
+    },
+    "paymentConnectionIndex": {
+      "$connectionId": {
+        ".read": false,
+        ".write": false
+      }
+    },
+    "paymentWebhookEvents": {
+      "$eventId": {
+        ".read": false,
+        ".write": false
+      }
+    },
+    "paymentRefunds": {
+      "$companyId": {
+        "$branchId": {
+          "$orderId": {
+            ".read": false,
+            ".write": false
+          }
+        }
       }
     },
     "billingEntitlements": {
       "$companyId": {
         "$branchId": {
           ".read": "auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).exists() || root.child($companyId).child('branches').child($branchId).child('kiosks').child(auth.uid).child('isActive').val() == true)",
-          ".write": "auth != null && !data.exists() && newData.exists() && root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid && newData.child('ownerUid').val() == auth.uid && newData.child('companyId').val() == $companyId && newData.child('branchId').val() == $branchId && newData.child('plan').val() == 'starter' && newData.child('subscriptionStatus').val() == 'trialing' && newData.child('periodStartAt').val() == now && newData.child('trialStartedAt').val() == now && newData.child('periodEndAt').isNumber() && newData.child('periodEndAt').val() >= now + 1209000000 && newData.child('periodEndAt').val() <= now + 1209900000",
+          ".write": "(auth != null && !data.exists() && newData.exists() && root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid && newData.child('ownerUid').val() == auth.uid && newData.child('companyId').val() == $companyId && newData.child('branchId').val() == $branchId && newData.child('plan').val() == 'starter' && newData.child('subscriptionStatus').val() == 'trialing' && newData.child('periodStartAt').val() == now && newData.child('trialStartedAt').val() == now && newData.child('periodEndAt').isNumber() && newData.child('periodEndAt').val() >= now + 1209000000 && newData.child('periodEndAt').val() <= now + 1209900000) && (root.child('lifecycleMaintenance').child('enabled').val() != true && root.child($companyId).child('lifecycle').child('status').val() != 'closing' && !root.child('deletionTombstones').child($companyId).child('_business').exists() && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'closing' && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'deleting' && !root.child('deletionTombstones').child($companyId).child($branchId).exists())",
           ".validate": "newData.hasChildren(['companyId','branchId','ownerUid','plan','subscriptionStatus','periodStartAt','periodEndAt','trialStartedAt'])"
         }
       }
@@ -102,87 +146,58 @@
       ".read": "auth != null && $companyId.matches(/^company-[a-z0-9-]+$/) && root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true",
       "companyProfile": {
         ".read": "auth != null && root.child($companyId).child('users').child(auth.uid).exists()",
-        ".write": "auth != null && ((!data.exists() && newData.child('ownerUids').child(auth.uid).val() == true) || root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true)",
+        ".write": "(auth != null && ((!data.exists() && newData.child('ownerUids').child(auth.uid).val() == true) || root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true)) && (root.child('lifecycleMaintenance').child('enabled').val() != true && root.child($companyId).child('lifecycle').child('status').val() != 'closing' && !root.child('deletionTombstones').child($companyId).child('_business').exists())",
         ".validate": "newData.hasChildren(['companyId', 'companyName', 'ownerUids']) && newData.child('companyId').val() == $companyId && newData.child('companyName').isString() && newData.child('companyName').val().length > 1 && newData.child('ownerUids').child(auth.uid).val() == true"
       },
       "kioskEnrollments": {
         "$kioskUid": {
           ".read": "auth != null && (auth.uid == $kioskUid || root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || root.child($companyId).child('branches').child(data.child('branchId').val()).child('users').child(auth.uid).exists())",
-          // The branch that the enrollment names is the one whose owner and manager
-          // may write it, so an enrollment cannot be pointed at a branch the writer
-          // does not run.
-          ".write": "auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || root.child($companyId).child('branches').child(newData.child('branchId').val()).child('branchProfile').child('ownerUid').val() == auth.uid || root.child($companyId).child('branches').child(newData.child('branchId').val()).child('branchProfile').child('managerUid').val() == auth.uid) && (root.child('billingEntitlements').child($companyId).child(newData.child('branchId').val()).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child(newData.child('branchId').val()).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child(newData.child('branchId').val()).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child(newData.child('branchId').val()).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child(newData.child('branchId').val()).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child(newData.child('branchId').val()).child('plan').val() == 'premium'))",
+          ".write": "(auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || root.child($companyId).child('branches').child(newData.child('branchId').val()).child('branchProfile').child('ownerUid').val() == auth.uid || root.child($companyId).child('branches').child(newData.child('branchId').val()).child('branchProfile').child('managerUid').val() == auth.uid) && (root.child('billingEntitlements').child($companyId).child(newData.child('branchId').val()).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child(newData.child('branchId').val()).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child(newData.child('branchId').val()).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child(newData.child('branchId').val()).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child(newData.child('branchId').val()).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child(newData.child('branchId').val()).child('plan').val() == 'premium'))) && (root.child('lifecycleMaintenance').child('enabled').val() != true && root.child($companyId).child('lifecycle').child('status').val() != 'closing' && !root.child('deletionTombstones').child($companyId).child('_business').exists()) && root.child($companyId).child('branches').child(newData.child('branchId').val()).child('lifecycle').child('status').val() != 'closing' && root.child($companyId).child('branches').child(newData.child('branchId').val()).child('lifecycle').child('status').val() != 'deleting'",
           ".validate": "newData.hasChildren(['kioskUid', 'companyId', 'branchId', 'isActive', 'name', 'registeredAt']) && newData.child('kioskUid').val() == $kioskUid && newData.child('companyId').val() == $companyId && newData.child('branchId').val().matches(/^branch-[a-z0-9-]+$/) && newData.child('isActive').isBoolean() && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('name').val().length <= 60 && newData.child('registeredAt').isNumber()"
         }
       },
       "users": {
         "$uid": {
           ".read": "auth != null && (auth.uid == $uid || root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true)",
-          // The owner may write any member's profile. A branch manager may add,
-          // edit or remove one only while it is tagged staff, which keeps managers
-          // from minting a peer and from deleting the owner out of the company.
-          //
-          // Unqualified self-service is deliberately absent. `auth.uid == $uid` on
-          // its own let any signed-in account insert itself into any company's
-          // member list, and the company-wide .read trusts that list, so the row
-          // bought read access to every branch the company owns. Membership has to
-          // be granted by someone with standing, or by the bootstrap path
-          // (ownerUids) that onboarding writes before this node.
-          ".write": "auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || (((newData.child('companyRole').val() == 'staff') || (!newData.exists() && data.child('companyRole').val() == 'staff')) && root.child($companyId).child('users').child(auth.uid).child('companyRole').val() == 'manager') || (auth.uid == $uid && data.exists() && newData.child('companyRole').val() == data.child('companyRole').val()))",
+          ".write": "(auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || (((newData.child('companyRole').val() == 'staff') || (!newData.exists() && data.child('companyRole').val() == 'staff')) && root.child($companyId).child('users').child(auth.uid).child('companyRole').val() == 'manager') || (auth.uid == $uid && data.exists() && newData.child('companyRole').val() == data.child('companyRole').val()))) && (root.child('lifecycleMaintenance').child('enabled').val() != true && root.child($companyId).child('lifecycle').child('status').val() != 'closing' && !root.child('deletionTombstones').child($companyId).child('_business').exists())",
           ".validate": "newData.hasChildren(['uid', 'email', 'companyId']) && newData.child('uid').val() == $uid && newData.child('companyId').val() == $companyId"
         }
       },
       "branches": {
         "$branchId": {
           ".read": "auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).exists())",
-          ".write": "auth != null && !newData.exists() && root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))",
+          ".write": false,
           "branchProfile": {
             ".read": "auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).exists())",
-            ".write": "(auth != null && (root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid || (newData.child('ownerUid').val() == auth.uid && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || !root.child($companyId).child('companyProfile').exists())))) && (!data.exists() || (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium')))",
+            ".write": "((auth != null && (root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid || (newData.child('ownerUid').val() == auth.uid && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || !root.child($companyId).child('companyProfile').exists())))) && (!data.exists() || (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium')))) && (root.child('lifecycleMaintenance').child('enabled').val() != true && root.child($companyId).child('lifecycle').child('status').val() != 'closing' && !root.child('deletionTombstones').child($companyId).child('_business').exists() && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'closing' && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'deleting' && !root.child('deletionTombstones').child($companyId).child($branchId).exists())",
             ".validate": "!newData.exists() || (newData.hasChildren(['branchId', 'branchName', 'companyId', 'ownerUid']) && newData.child('branchId').val() == $branchId && newData.child('companyId').val() == $companyId && newData.child('ownerUid').isString() && (!newData.hasChild('plan') || newData.child('plan').val() == 'free' || newData.child('plan').val() == 'subscription' || newData.child('plan').val() == 'starter'))"
           },
           "users": {
-            // Listing a branch's members is a management view: the company owner
-            // and that branch's manager. Staff can still read their own row below.
             ".read": "auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'manager')",
             "$uid": {
               ".read": "auth != null && (auth.uid == $uid || root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'owner' || root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'manager')",
-              // The owner may assign any role. A branch's manager may add staff to
-              // that branch only — never another manager, and never to a branch
-              // they do not manage — and may take that staff back out again.
-              //
-              // Self-service is confined to an existing row whose role does not
-              // change. Blanket `auth.uid == $uid` previously let any signed-in
-              // account write itself onto any branch roster as 'manager' or
-              // 'owner', which handed over that branch's menu outright.
-              ".write": "(auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || (root.child($companyId).child('branches').child($branchId).child('branchProfile').child('managerUid').val() == auth.uid && (newData.child('role').val() == 'staff' || (!newData.exists() && data.child('role').val() == 'staff'))) || (auth.uid == $uid && data.exists() && newData.child('role').val() == data.child('role').val()))) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))",
+              ".write": "((auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || (root.child($companyId).child('branches').child($branchId).child('branchProfile').child('managerUid').val() == auth.uid && (newData.child('role').val() == 'staff' || (!newData.exists() && data.child('role').val() == 'staff'))) || (auth.uid == $uid && data.exists() && newData.child('role').val() == data.child('role').val()))) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))) && (root.child('lifecycleMaintenance').child('enabled').val() != true && root.child($companyId).child('lifecycle').child('status').val() != 'closing' && !root.child('deletionTombstones').child($companyId).child('_business').exists() && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'closing' && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'deleting' && !root.child('deletionTombstones').child($companyId).child($branchId).exists())",
               ".validate": "newData.hasChildren(['uid', 'role']) && newData.child('uid').val() == $uid && (newData.child('role').val() == 'owner' || newData.child('role').val() == 'manager' || newData.child('role').val() == 'staff')"
             }
           },
           "kiosks": {
             "$kioskUid": {
               ".read": "auth != null && (auth.uid == $kioskUid || root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).exists())",
-              // Running a branch includes the tablets in it, so the branch's own
-              // manager may manage devices alongside the owner. Scoped to this
-              // branch by position in the tree: the managerUid has to match the
-              // branch whose kiosks node this is.
-              ".write": "(auth != null && (root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid || root.child($companyId).child('branches').child($branchId).child('branchProfile').child('managerUid').val() == auth.uid)) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))",
+              ".write": "((auth != null && (root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid || root.child($companyId).child('branches').child($branchId).child('branchProfile').child('managerUid').val() == auth.uid)) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))) && (root.child('lifecycleMaintenance').child('enabled').val() != true && root.child($companyId).child('lifecycle').child('status').val() != 'closing' && !root.child('deletionTombstones').child($companyId).child('_business').exists() && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'closing' && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'deleting' && !root.child('deletionTombstones').child($companyId).child($branchId).exists())",
               ".validate": "newData.hasChildren(['kioskUid', 'name', 'isActive']) && newData.child('kioskUid').val() == $kioskUid && newData.child('name').isString() && newData.child('isActive').isBoolean()"
             }
           },
           "categories": {
             ".read": "auth != null && (root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).exists() || root.child($companyId).child('branches').child($branchId).child('kiosks').child(auth.uid).child('isActive').val() == true)",
-            // Menu edits (including category delete, which takes every item with
-            // it) are manager-and-above. Staff cannot reach this node.
-            ".write": "(auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid || root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'manager')) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))",
+            ".write": "((auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid || root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'manager')) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))) && (root.child('lifecycleMaintenance').child('enabled').val() != true && root.child($companyId).child('lifecycle').child('status').val() != 'closing' && !root.child('deletionTombstones').child($companyId).child('_business').exists() && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'closing' && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'deleting' && !root.child('deletionTombstones').child($companyId).child($branchId).exists())",
             "$category": {
               "$item": {
                 "available": {
-                  ".write": "(auth != null && root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'staff' && data.parent().child('name').isString() && newData.isBoolean()) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))",
+                  ".write": "((auth != null && root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'staff' && data.parent().child('name').isString() && newData.isBoolean()) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))) && (root.child('lifecycleMaintenance').child('enabled').val() != true && root.child($companyId).child('lifecycle').child('status').val() != 'closing' && !root.child('deletionTombstones').child($companyId).child('_business').exists() && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'closing' && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'deleting' && !root.child('deletionTombstones').child($companyId).child($branchId).exists())",
                   ".validate": "newData.isBoolean()"
                 },
                 "manualUnavailable": {
-                  ".write": "(auth != null && root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'staff' && data.parent().child('name').isString() && newData.isBoolean()) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))",
+                  ".write": "((auth != null && root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'staff' && data.parent().child('name').isString() && newData.isBoolean()) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))) && (root.child('lifecycleMaintenance').child('enabled').val() != true && root.child($companyId).child('lifecycle').child('status').val() != 'closing' && !root.child('deletionTombstones').child($companyId).child('_business').exists() && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'closing' && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'deleting' && !root.child('deletionTombstones').child($companyId).child($branchId).exists())",
                   ".validate": "newData.isBoolean()"
                 }
               }
@@ -190,21 +205,35 @@
           },
           "inventory": {
             ".read": "auth != null && (root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).exists() || root.child($companyId).child('branches').child($branchId).child('kiosks').child(auth.uid).child('isActive').val() == true)",
-            // Owners and managers control inventory structure. Staff may change only
-            // stock fields on existing records, with audit metadata beside them.
-            ".write": "(auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid || root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'manager')) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))",
+            ".write": "((auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid || root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'manager')) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))) && (root.child('lifecycleMaintenance').child('enabled').val() != true && root.child($companyId).child('lifecycle').child('status').val() != 'closing' && !root.child('deletionTombstones').child($companyId).child('_business').exists() && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'closing' && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'deleting' && !root.child('deletionTombstones').child($companyId).child($branchId).exists())",
             "$category": {
               "$item": {
-                  "stock": { ".write": "(auth != null && root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'staff' && root.child($companyId).child('branches').child($branchId).child('inventory').child($category).child($item).exists() && newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))" },
-                  "currentStock": { ".write": "(auth != null && root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'staff' && root.child($companyId).child('branches').child($branchId).child('inventory').child($category).child($item).exists() && newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))" },
-                  "lastUpdated": { ".write": "(auth != null && root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'staff' && root.child($companyId).child('branches').child($branchId).child('inventory').child($category).child($item).exists() && newData.isString() && newData.val().length <= 40) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))" },
-                  "lastModifiedBy": { ".write": "(auth != null && root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'staff' && root.child($companyId).child('branches').child($branchId).child('inventory').child($category).child($item).exists() && newData.val() == auth.uid) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))" },
+                "stock": {
+                  ".write": "((auth != null && root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'staff' && root.child($companyId).child('branches').child($branchId).child('inventory').child($category).child($item).exists() && newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))) && (root.child('lifecycleMaintenance').child('enabled').val() != true && root.child($companyId).child('lifecycle').child('status').val() != 'closing' && !root.child('deletionTombstones').child($companyId).child('_business').exists() && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'closing' && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'deleting' && !root.child('deletionTombstones').child($companyId).child($branchId).exists())"
+                },
+                "currentStock": {
+                  ".write": "((auth != null && root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'staff' && root.child($companyId).child('branches').child($branchId).child('inventory').child($category).child($item).exists() && newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))) && (root.child('lifecycleMaintenance').child('enabled').val() != true && root.child($companyId).child('lifecycle').child('status').val() != 'closing' && !root.child('deletionTombstones').child($companyId).child('_business').exists() && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'closing' && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'deleting' && !root.child('deletionTombstones').child($companyId).child($branchId).exists())"
+                },
+                "lastUpdated": {
+                  ".write": "((auth != null && root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'staff' && root.child($companyId).child('branches').child($branchId).child('inventory').child($category).child($item).exists() && newData.isString() && newData.val().length <= 40) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))) && (root.child('lifecycleMaintenance').child('enabled').val() != true && root.child($companyId).child('lifecycle').child('status').val() != 'closing' && !root.child('deletionTombstones').child($companyId).child('_business').exists() && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'closing' && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'deleting' && !root.child('deletionTombstones').child($companyId).child($branchId).exists())"
+                },
+                "lastModifiedBy": {
+                  ".write": "((auth != null && root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'staff' && root.child($companyId).child('branches').child($branchId).child('inventory').child($category).child($item).exists() && newData.val() == auth.uid) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))) && (root.child('lifecycleMaintenance').child('enabled').val() != true && root.child($companyId).child('lifecycle').child('status').val() != 'closing' && !root.child('deletionTombstones').child($companyId).child('_business').exists() && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'closing' && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'deleting' && !root.child('deletionTombstones').child($companyId).child($branchId).exists())"
+                },
                 "sizes": {
                   "$size": {
-                  "stock": { ".write": "(auth != null && root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'staff' && root.child($companyId).child('branches').child($branchId).child('inventory').child($category).child($item).child('sizes').child($size).exists() && newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))" },
-                  "currentStock": { ".write": "(auth != null && root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'staff' && root.child($companyId).child('branches').child($branchId).child('inventory').child($category).child($item).child('sizes').child($size).exists() && newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))" },
-                  "lastUpdated": { ".write": "(auth != null && root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'staff' && root.child($companyId).child('branches').child($branchId).child('inventory').child($category).child($item).child('sizes').child($size).exists() && newData.isString() && newData.val().length <= 40) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))" },
-                  "lastModifiedBy": { ".write": "(auth != null && root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'staff' && root.child($companyId).child('branches').child($branchId).child('inventory').child($category).child($item).child('sizes').child($size).exists() && newData.val() == auth.uid) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))" }
+                    "stock": {
+                      ".write": "((auth != null && root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'staff' && root.child($companyId).child('branches').child($branchId).child('inventory').child($category).child($item).child('sizes').child($size).exists() && newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))) && (root.child('lifecycleMaintenance').child('enabled').val() != true && root.child($companyId).child('lifecycle').child('status').val() != 'closing' && !root.child('deletionTombstones').child($companyId).child('_business').exists() && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'closing' && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'deleting' && !root.child('deletionTombstones').child($companyId).child($branchId).exists())"
+                    },
+                    "currentStock": {
+                      ".write": "((auth != null && root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'staff' && root.child($companyId).child('branches').child($branchId).child('inventory').child($category).child($item).child('sizes').child($size).exists() && newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))) && (root.child('lifecycleMaintenance').child('enabled').val() != true && root.child($companyId).child('lifecycle').child('status').val() != 'closing' && !root.child('deletionTombstones').child($companyId).child('_business').exists() && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'closing' && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'deleting' && !root.child('deletionTombstones').child($companyId).child($branchId).exists())"
+                    },
+                    "lastUpdated": {
+                      ".write": "((auth != null && root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'staff' && root.child($companyId).child('branches').child($branchId).child('inventory').child($category).child($item).child('sizes').child($size).exists() && newData.isString() && newData.val().length <= 40) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))) && (root.child('lifecycleMaintenance').child('enabled').val() != true && root.child($companyId).child('lifecycle').child('status').val() != 'closing' && !root.child('deletionTombstones').child($companyId).child('_business').exists() && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'closing' && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'deleting' && !root.child('deletionTombstones').child($companyId).child($branchId).exists())"
+                    },
+                    "lastModifiedBy": {
+                      ".write": "((auth != null && root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'staff' && root.child($companyId).child('branches').child($branchId).child('inventory').child($category).child($item).child('sizes').child($size).exists() && newData.val() == auth.uid) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))) && (root.child('lifecycleMaintenance').child('enabled').val() != true && root.child($companyId).child('lifecycle').child('status').val() != 'closing' && !root.child('deletionTombstones').child($companyId).child('_business').exists() && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'closing' && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'deleting' && !root.child('deletionTombstones').child($companyId).child($branchId).exists())"
+                    }
                   }
                 }
               }
@@ -212,109 +241,155 @@
           },
           "appSettings": {
             ".read": "auth != null && (root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).exists() || root.child($companyId).child('branches').child($branchId).child('kiosks').child(auth.uid).child('isActive').val() == true)",
-            ".write": "(auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid || root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'manager')) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))"
+            ".write": "((auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid || root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'manager')) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))) && (root.child('lifecycleMaintenance').child('enabled').val() != true && root.child($companyId).child('lifecycle').child('status').val() != 'closing' && !root.child('deletionTombstones').child($companyId).child('_business').exists() && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'closing' && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'deleting' && !root.child('deletionTombstones').child($companyId).child($branchId).exists())"
           },
-          // Analytics is a derived roll-up of the order ledger, and processing runs
-          // in whichever session is open (useAnalyticsProcessor polls for new
-          // orders), so every branch member has to be able to write it. Restricting
-          // this to managers would leave orders placed during a staff-only shift
-          // uncounted until a manager next signed in. The blast radius is one
-          // aggregate, and rebuildAnalyticsFromLogs() can regenerate it.
           "analytics": {
             ".read": "auth != null && root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).exists()",
-            ".write": "(auth != null && root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).exists()) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))"
+            ".write": "((auth != null && root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).exists()) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))) && (root.child('lifecycleMaintenance').child('enabled').val() != true && root.child($companyId).child('lifecycle').child('status').val() != 'closing' && !root.child('deletionTombstones').child($companyId).child('_business').exists() && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'closing' && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'deleting' && !root.child('deletionTombstones').child($companyId).child($branchId).exists())"
           },
-          // Orders that should not count toward the roll-up: a duplicate, a test,
-          // a training run. This is an accounting adjustment, and it is kept
-          // beside the ledger rather than on it, so the order itself stays exactly
-          // as the kiosk wrote it. Putting the flag on the order would mean
-          // loosening the .write rule on /logs, which allows one thing only - a
-          // kiosk creating an order that does not yet exist. That rule is what
-          // makes the ledger immutable, and immutability is worth more than the
-          // convenience of writing the flag in place.
-          //
-          // Every member may read it, because excluding an order rebuilds the
-          // analytics document that every dashboard reads, so each session needs
-          // to apply the same flags. Setting one stays with the roles that answer
-          // for the numbers, and `by` is pinned to the writer so a flag always
-          // names the account that decided it.
           "analyticsExclusions": {
             ".read": "auth != null && root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).exists()",
             "$orderId": {
-              ".write": "(auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid || root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'manager')) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))",
+              ".write": "((auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid || root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'manager')) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))) && (root.child('lifecycleMaintenance').child('enabled').val() != true && root.child($companyId).child('lifecycle').child('status').val() != 'closing' && !root.child('deletionTombstones').child($companyId).child('_business').exists() && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'closing' && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'deleting' && !root.child('deletionTombstones').child($companyId).child($branchId).exists())",
               ".validate": "newData.hasChildren(['excluded', 'reason', 'at', 'by'])",
-              // Each allowed field is named here as well as checked above. The
-              // `$other` rule below matches every child that no sibling names, so
-              // without these a `$other: false` would reject 'excluded', 'reason',
-              // 'at' and 'by' along with the junk it is meant to catch - the
-              // hasChildren() check in the parent .validate does not exempt them.
-              // Same shape as the order node under /logs.
-              "excluded": { ".validate": "newData.isBoolean()" },
-              "reason": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 80" },
-              "at": { ".validate": "newData.isNumber()" },
-              "by": { ".validate": "newData.val() == auth.uid" },
-              "$other": { ".validate": false }
+              "excluded": {
+                ".validate": "newData.isBoolean()"
+              },
+              "reason": {
+                ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 80"
+              },
+              "at": {
+                ".validate": "newData.isNumber()"
+              },
+              "by": {
+                ".validate": "newData.val() == auth.uid"
+              },
+              "$other": {
+                ".validate": false
+              }
             }
           },
-          // Restocking appends a history row. adjustStock() writes stock first and
-          // the history row second without a try/catch, so a denial here surfaced
-          // as a failed stock adjustment even though the stock change had landed.
           "inventoryHistory": {
             ".read": "auth != null && root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).exists()",
-            ".write": "(auth != null && root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).exists()) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))"
+            ".write": "((auth != null && root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).exists()) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))) && (root.child('lifecycleMaintenance').child('enabled').val() != true && root.child($companyId).child('lifecycle').child('status').val() != 'closing' && !root.child('deletionTombstones').child($companyId).child('_business').exists() && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'closing' && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'deleting' && !root.child('deletionTombstones').child($companyId).child($branchId).exists())"
           },
-          // Discarding one order belongs to the manager who runs the branch. Emptying
-          // the bin outright is an owner action, so the node-level .write is owner-
-          // only and the per-order .write widens it to managers. Rules cascade
-          // downward, so deleting the whole node never reaches the child rule.
           "deletedLogs": {
             ".read": "auth != null && root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).exists()",
-            ".write": "(auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid)) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))",
+            ".write": "((auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid)) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))) && (root.child('lifecycleMaintenance').child('enabled').val() != true && root.child($companyId).child('lifecycle').child('status').val() != 'closing' && !root.child('deletionTombstones').child($companyId).child('_business').exists() && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'closing' && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'deleting' && !root.child('deletionTombstones').child($companyId).child($branchId).exists())",
             "$orderId": {
-              ".write": "(auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid || root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'manager')) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))"
+              ".write": "((auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid || root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'manager')) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))) && (root.child('lifecycleMaintenance').child('enabled').val() != true && root.child($companyId).child('lifecycle').child('status').val() != 'closing' && !root.child('deletionTombstones').child($companyId).child('_business').exists() && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'closing' && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'deleting' && !root.child('deletionTombstones').child($companyId).child($branchId).exists())"
             }
           },
-          // Menu edit audit trail. addMenuLog() rides along with every menu change,
-          // so it has to be writable by the same roles that can edit the menu.
-          // No .read is declared: the branch node already grants every member read
-          // of the subtree, and a child rule can only widen access, never narrow it,
-          // so anything written here would be decoration rather than a restriction.
           "menuLogs": {
-            ".write": "(auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid || root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'manager')) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))"
+            ".write": "((auth != null && (root.child($companyId).child('companyProfile').child('ownerUids').child(auth.uid).val() == true || root.child($companyId).child('branches').child($branchId).child('branchProfile').child('ownerUid').val() == auth.uid || root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).child('role').val() == 'manager')) && (root.child('billingEntitlements').child($companyId).child($branchId).child('periodEndAt').val() > now && (root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'active' || root.child('billingEntitlements').child($companyId).child($branchId).child('subscriptionStatus').val() == 'trialing') && (root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'basic' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'starter' || root.child('billingEntitlements').child($companyId).child($branchId).child('plan').val() == 'premium'))) && (root.child('lifecycleMaintenance').child('enabled').val() != true && root.child($companyId).child('lifecycle').child('status').val() != 'closing' && !root.child('deletionTombstones').child($companyId).child('_business').exists() && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'closing' && root.child($companyId).child('branches').child($branchId).child('lifecycle').child('status').val() != 'deleting' && !root.child('deletionTombstones').child($companyId).child($branchId).exists())"
           },
           "logs": {
             "$orderId": {
               ".read": "auth != null && (root.child($companyId).child('branches').child($branchId).child('users').child(auth.uid).exists() || (root.child($companyId).child('branches').child($branchId).child('kiosks').child(auth.uid).child('isActive').val() == true && (!data.exists() || data.child('submittedByUid').val() == auth.uid)))",
               ".write": false,
               ".validate": "newData.hasChildren(['orderId', 'submittedByUid', 'orderNumber', 'customerName', 'items', 'total', 'paymentMethod', 'paymentStatus', 'timestamp', 'inventoryProcessed', 'inventoryProcessedAt', 'orderSource']) && newData.child('orderId').val() == $orderId && $orderId.matches(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/) && ((newData.child('paymentMethod').val() == 'QR_CODE' && newData.child('paymentStatus').val() == 'CUSTOMER_REPORTED_PAID') || (newData.child('paymentMethod').val() == 'COUNTER' && newData.child('paymentStatus').val() == 'PAY_AT_COUNTER')) && newData.child('inventoryProcessed').val() == true && newData.child('orderSource').val() == 'android_kiosk' && newData.child('submittedByUid').val() == auth.uid && root.child($companyId).child('branches').child($branchId).child('kiosks').child(auth.uid).exists() && root.child($companyId).child('branches').child($branchId).child('kiosks').child(auth.uid).child('isActive').val() == true",
-              "orderId": { ".validate": "newData.isString() && newData.val() == $orderId" },
-              "submittedByUid": { ".validate": "newData.isString() && newData.val() == auth.uid" },
-              "orderNumber": { ".validate": "newData.isString() && newData.val().matches(/^[A-F0-9]{8}$/)" },
-              "customerName": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 80" },
-              "total": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000" },
-              "paymentMethod": { ".validate": "newData.val() == 'QR_CODE' || newData.val() == 'COUNTER'" },
-              "paymentStatus": { ".validate": "newData.val() == 'CUSTOMER_REPORTED_PAID' || newData.val() == 'PAY_AT_COUNTER'" },
-              "timestamp": { ".validate": "newData.isNumber() && newData.val() <= now && newData.val() >= now - 60000" },
-              "inventoryProcessed": { ".validate": "newData.val() == true" },
-              "inventoryProcessedAt": { ".validate": "newData.isNumber() && newData.val() <= now && newData.val() >= now - 60000" },
-              "orderSource": { ".validate": "newData.val() == 'android_kiosk'" },
+              "orderId": {
+                ".validate": "newData.isString() && newData.val() == $orderId"
+              },
+              "submittedByUid": {
+                ".validate": "newData.isString() && newData.val() == auth.uid"
+              },
+              "orderNumber": {
+                ".validate": "newData.isString() && newData.val().matches(/^[A-F0-9]{8}$/)"
+              },
+              "customerName": {
+                ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 80"
+              },
+              "total": {
+                ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000"
+              },
+              "paymentMethod": {
+                ".validate": "newData.val() == 'QR_CODE' || newData.val() == 'COUNTER'"
+              },
+              "paymentStatus": {
+                ".validate": "newData.val() == 'CUSTOMER_REPORTED_PAID' || newData.val() == 'PAY_AT_COUNTER'"
+              },
+              "timestamp": {
+                ".validate": "newData.isNumber() && newData.val() <= now && newData.val() >= now - 60000"
+              },
+              "inventoryProcessed": {
+                ".validate": "newData.val() == true"
+              },
+              "inventoryProcessedAt": {
+                ".validate": "newData.isNumber() && newData.val() <= now && newData.val() >= now - 60000"
+              },
+              "orderSource": {
+                ".validate": "newData.val() == 'android_kiosk'"
+              },
               "items": {
                 ".validate": "newData.hasChildren()",
                 "$line": {
                   ".validate": "$line.matches(/^([0-9]|[1-8][0-9]|9[0-8])$/) && newData.hasChildren(['name','size','quantity','price','subtotal']) && newData.child('subtotal').val() == newData.child('price').val() * newData.child('quantity').val()",
-                  "name": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 120" },
-                  "size": { ".validate": "newData.isString() && newData.val().length <= 40" },
-                  "quantity": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 99" },
-                  "price": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000" },
-                  "subtotal": { ".validate": "newData.isNumber() && newData.val() >= 0" },
-                  "$other": { ".validate": false }
+                  "name": {
+                    ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 120"
+                  },
+                  "size": {
+                    ".validate": "newData.isString() && newData.val().length <= 40"
+                  },
+                  "quantity": {
+                    ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 99"
+                  },
+                  "price": {
+                    ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000"
+                  },
+                  "subtotal": {
+                    ".validate": "newData.isNumber() && newData.val() >= 0"
+                  },
+                  "$other": {
+                    ".validate": false
+                  }
                 }
               },
-              "$other": { ".validate": false }
+              "$other": {
+                ".validate": false
+              }
             }
+          },
+          "lifecycle": {
+            ".write": false
           }
         }
+      },
+      "lifecycle": {
+        ".write": false
       }
+    },
+    "lifecycleAudit": {
+      ".read": false,
+      ".write": false
+    },
+    "lifecycleExports": {
+      ".read": false,
+      ".write": false
+    },
+    "lifecycleAuthCleanup": {
+      ".read": false,
+      ".write": false
+    },
+    "lifecyclePaymentHolds": {
+      ".read": false,
+      ".write": false
+    },
+    "deletionTombstones": {
+      ".read": false,
+      ".write": false
+    },
+    "lifecycleMaintenance": {
+      ".read": false,
+      ".write": false
+    },
+    "lifecycleReleaseGate": {
+      ".read": false,
+      ".write": false
+    },
+    "lifecycleJobStatus": {
+      ".read": false,
+      ".write": false
     }
   }
 }

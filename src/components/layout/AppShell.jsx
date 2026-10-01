@@ -4,7 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, TrendingUp, Boxes, ReceiptText, UtensilsCrossed,
   FileBarChart, History, Sun, Moon, Sparkles, Coffee, HelpCircle,
-  Monitor, CreditCard, MoreHorizontal, Users, User,
+  Monitor, CreditCard, ShieldCheck, MoreHorizontal, Users, User,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -23,6 +23,7 @@ import HelpCenter from '../help/HelpCenter';
 import Modal from '../ui/Modal';
 import ContentSkeleton from '../ui/ContentSkeleton';
 import BranchSwitcher from './BranchSwitcher';
+import LifecycleBanner from '../ui/LifecycleBanner';
 
 const AIAnalystDrawer = lazy(() => import('../ai/AIAnalystDrawer'));
 
@@ -43,6 +44,7 @@ const NAV_SETTINGS = [
   { key: 'team', label: 'Team', icon: Users, path: (b) => `/team/${b}`, cap: CAP.MANAGE_STAFF },
   { key: 'devices', label: 'Devices', icon: Monitor, path: (b) => `/devices/${b}`, cap: CAP.MANAGE_DEVICES },
   { key: 'subscription', label: 'Subscription', icon: CreditCard, path: (b) => `/subscription/${b}` },
+  { key: 'payments', label: 'Customer payments', icon: ShieldCheck, path: (b) => `/payments/${b}`, cap: CAP.MANAGE_BILLING },
 ];
 
 // Bottom bar shows the four daily tools plus a "More" entry that opens the rest.
@@ -61,6 +63,7 @@ function activeKeyFor(pathname) {
   if (pathname.includes('/devices/')) return 'devices';
   if (pathname.includes('/team/')) return 'team';
   if (pathname.includes('/subscription/')) return 'subscription';
+  if (pathname.includes('/payments/')) return 'payments';
   return 'home';
 }
 
@@ -309,6 +312,7 @@ export default function AppShell({ children, title }) {
             and only the content area is replaced while it downloads. */}
         <main className="shell__content page-enter" key={location.pathname}>
           <Suspense fallback={<ContentSkeleton />}>
+            <LifecycleBanner />
             {children}
           </Suspense>
         </main>

@@ -1,3 +1,5 @@
+import { useOperationalAccess } from '../hooks/useOperationalAccess';
+import ReadOnlyNotice from '../components/ui/ReadOnlyNotice';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   UtensilsCrossed, Plus, Pencil, Trash2, Star, ImagePlus, FolderPlus,
@@ -236,16 +238,17 @@ function ItemModal({ mode, branchId, category, itemKey, item, categories, onClos
 export default function MenuPage() {
   const { branchId } = useBranchData();
   const { can } = useAuth();
+  const operational = useOperationalAccess();
   // Menu structure is manager-and-above. Staff still reach this page to flip
   // availability, which is the one menu action their role allows.
-  const canEditMenu = can(CAP.MANAGE_ITEMS);
-  const canDelete = can(CAP.DELETE_MENU_ITEM);
+  const canEditMenu = operational && can(CAP.MANAGE_ITEMS);
+  const canDelete = operational && can(CAP.DELETE_MENU_ITEM);
   // Named per action rather than borrowing MANAGE_MENU for all of it, so the
   // matrix says what the buttons actually do. They resolve to the same tier
   // today; if that ever changes, this decides it instead of having to notice.
-  const canManageCategories = can(CAP.MANAGE_MENU);
-  const canRenameCategory = can(CAP.RENAME_CATEGORY);
-  const canDeleteCategory = can(CAP.DELETE_CATEGORY);
+  const canManageCategories = operational && can(CAP.MANAGE_MENU);
+  const canRenameCategory = operational && can(CAP.RENAME_CATEGORY);
+  const canDeleteCategory = operational && can(CAP.DELETE_CATEGORY);
   const [categories, setCategories] = useState([]);
   const [itemsByCategory, setItemsByCategory] = useState({});
   const [loaded, setLoaded] = useState(false);
@@ -256,7 +259,7 @@ export default function MenuPage() {
   const [availabilityFilter, setAvailabilityFilter] = useState('all');
   const [itemStates, setItemStates] = useState({});
   const pendingItems = useRef(new Set());
-  const canToggle = can(CAP.TOGGLE_AVAILABILITY);
+  const canToggle = operational && can(CAP.TOGGLE_AVAILABILITY);
   const [collapsed, setCollapsed] = useState({});
   const [newCategory, setNewCategory] = useState('');
   const [busy, setBusy] = useState('');
@@ -369,6 +372,7 @@ export default function MenuPage() {
 
   return (
     <>
+      <ReadOnlyNotice />
       <div className="flex-between rise" style={{ marginBottom: 'var(--sp-5)', flexWrap: 'wrap' }}>
         <p className="card-sub" style={{ margin: 0 }}>
           {categories.length} categories · {totalItems} items. Availability syncs automatically with inventory stock.

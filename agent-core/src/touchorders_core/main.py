@@ -14,6 +14,7 @@ from touchorders_core.api.app import create_app
 from touchorders_core.api.auth import FirebaseIdentityVerifier
 from touchorders_core.api.entitlements import FirebaseEntitlementService
 from touchorders_core.api.orders import FirebaseOrderService
+from touchorders_core.api.payments import FirebasePaymentService, PayMongoClient
 from touchorders_core.domain.enums import AgentName
 from touchorders_core.llm.budget import BudgetTracker, DailyBudget
 from touchorders_core.llm.gateway import LLMGateway, OpenAIClient
@@ -62,14 +63,28 @@ def build_app(settings: Settings | None = None):
 
     entitlement_service = None
     order_service = None
+    payment_service = None
+    lifecycle_service = None
     if verifier and os.environ.get("FIREBASE_DATABASE_URL"):
         from firebase_admin import db
+        from firebase_admin import auth
+        from touchorders_core.api.lifecycle import LifecycleService
+        from touchorders_core.api.lifecycle_storage import configured_adapters
+        mailer, objects, auth = configured_adapters(db)
+        lifecycle_service = LifecycleService(db, mailer=mailer, storage=objects, auth=auth)
         entitlement_service = FirebaseEntitlementService(db)
         order_service = FirebaseOrderService(db)
+        paymongo_key = settings.paymongo_secret_key.get_secret_value() if settings.paymongo_secret_key else ""
+        paymongo = PayMongoClient(paymongo_key, settings.paymongo_base_url) if paymongo_key else None
+        payment_service = FirebasePaymentService(
+            db, order_service, paymongo,
+            linked_accounts_enabled=settings.paymongo_linked_accounts_enabled,
+        )
     else:
         logger.warning("billing_database_unconfigured", detail="AI requests disabled until FIREBASE_DATABASE_URL is set")
     return create_app(settings, gateway=gateway, identity_verifier=verifier,
-                      entitlement_service=entitlement_service, order_service=order_service)
+                      entitlement_service=entitlement_service, order_service=order_service,
+                      payment_service=payment_service, lifecycle_service=lifecycle_service)
 
 
 app = build_app()

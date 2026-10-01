@@ -431,68 +431,16 @@ export async function addBranchToWorkspace({
 }
 
 /**
- * Permanently deletes a branch and its data for the signed-in owner.
- * Requires the account password re-auth to have already happened (see
- * AuthContext.deleteBranchWithPassword). Cascades cleanup:
- *  - removes the whole $companyId/branches/$branchId node (incl. data)
- *  - removes the branch from workspace.branches / branchIds
- *  - if the active branch is deleted, switches to the first remaining branch
+ * Schedules branch closure through the trusted lifecycle service.
+ * Password reauthentication happens in AuthContext.deleteBranchWithPassword.
+ * Existing records and workspace references remain during the 30-day recovery
+ * period; the operator job performs eventual cleanup after safety checks.
  */
 export async function deleteBranchToWorkspace(uid, branchId) {
-  if (!uid || !branchId) throw new Error('uid and branchId are required.');
   const currentWorkspace = await loadWorkspace(uid);
-  if (!currentWorkspace?.onboardingComplete || !currentWorkspace.companyId) {
-    throw new Error('This account has no workspace.');
-  }
-  const branchMap = currentWorkspace.branches || {};
-  const isKnown = branchMap[branchId] || currentWorkspace.branchId === branchId || currentWorkspace.branchIds?.[branchId];
-  if (!isKnown) {
-    throw new Error('That branch does not belong to this workspace.');
-  }
-  const remaining = Object.keys(branchMap).filter((id) => id !== branchId);
-  if (remaining.length === 0 && currentWorkspace.branchId === branchId) {
-    throw new Error('You cannot delete the only branch in this workspace.');
-  }
-
-  const companyId = currentWorkspace.companyId;
-
-  // 1. Remove the branch subtree (rules allow owner delete — see rules).
-  await writeWithRetry(() => remove(ref(database, `${companyId}/branches/${branchId}`)));
-
-  // 2. Remove branch-level user membership leftovers for the owner.
-  await remove(ref(database, `${companyId}/branches/${branchId}/users/${uid}`)).catch(() => {});
-
-  // 3. Update workspace record.
-  const nextBranchId =
-    currentWorkspace.branchId === branchId
-      ? (remaining[0] || currentWorkspace.branchId)
-      : currentWorkspace.branchId;
-  const nextBranches = { ...branchMap };
-  delete nextBranches[branchId];
-  const nextBranchIds = { ...(currentWorkspace.branchIds || { [currentWorkspace.branchId]: true }) };
-  delete nextBranchIds[branchId];
-
-  const updatedWorkspace = {
-    ...currentWorkspace,
-    branchId: nextBranchId,
-    branchName: nextBranches[nextBranchId]?.name || currentWorkspace.branchName,
-    branches: nextBranches,
-    branchIds: nextBranchIds,
-    updatedAt: serverTimestamp(),
-  };
-  await set(ref(database, `${companyId}/users/${uid}/workspace`), updatedWorkspace);
-  // Mirror the removal into the flat branchIds index: the rules read that path and
-  // it must not keep pointing at a branch that no longer exists.
-  await remove(ref(database, `${companyId}/users/${uid}/branchIds/${branchId}`)).catch(() => {});
-  await set(ref(database, `accounts/${uid}`), {
-    uid,
-    companyId,
-    activeBranchId: nextBranchId,
-    role: 'owner',
-    updatedAt: serverTimestamp(),
-  });
-
-  return { ...updatedWorkspace, updatedAt: Date.now() };
+  const { closeBusiness } = await import('./lifecycleApi');
+  await closeBusiness(currentWorkspace.companyId, branchId);
+  return currentWorkspace;
 }
 
 export async function registerDevice(uid, branchId, deviceName, deviceUid) {

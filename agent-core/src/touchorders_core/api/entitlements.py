@@ -28,6 +28,9 @@ class FirebaseEntitlementService:
     def reserve(self, *, uid: str, company: str, branch: str, mode: str, request_id: str) -> AiGrant:
         if not _ID.fullmatch(company) or not _ID.fullmatch(branch) or not _REQUEST.fullmatch(request_id):
             raise HTTPException(400, "Invalid branch or request identifier")
+        if (self.db.reference("lifecycleMaintenance/enabled").get() is True
+                or self.db.reference(f"{company}/branches/{branch}/lifecycle/status").get() in {"closing", "deleting", "deleted"}):
+            raise HTTPException(403, "Branch closure or maintenance is in progress")
         owner = self.db.reference(f"{company}/companyProfile/ownerUids/{uid}").get() is True
         manager = self.db.reference(f"{company}/branches/{branch}/users/{uid}/role").get() == "manager"
         member = self.db.reference(f"{company}/users/{uid}").get()

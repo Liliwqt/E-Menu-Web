@@ -136,6 +136,17 @@ class Settings(BaseSettings):
             "FIREBASE_CREDENTIALS_PATH", "TOUCHORDERS_FIREBASE_CREDENTIALS_PATH"
         ),
     )
+    paymongo_secret_key: SecretStr | None = Field(
+        default=None, validation_alias=AliasChoices("PAYMONGO_SECRET_KEY", "TOUCHORDERS_PAYMONGO_SECRET_KEY")
+    )
+    paymongo_base_url: str = Field(
+        default="https://api.paymongo.com/v1",
+        validation_alias=AliasChoices("PAYMONGO_BASE_URL", "TOUCHORDERS_PAYMONGO_BASE_URL"),
+    )
+    paymongo_linked_accounts_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("PAYMONGO_LINKED_ACCOUNTS_ENABLED", "TOUCHORDERS_PAYMONGO_LINKED_ACCOUNTS_ENABLED"),
+    )
     cors_allow_origins: str = Field(
         default="*",
         validation_alias=AliasChoices("TOUCHORDERS_CORS_ORIGINS", "CORS_ORIGINS"),

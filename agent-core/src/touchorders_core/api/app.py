@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,6 +14,8 @@ from touchorders_core import __version__
 from touchorders_core.api.auth import IdentityVerifier
 from touchorders_core.api.routes.ai import router as ai_router
 from touchorders_core.api.routes.orders import router as orders_router
+from touchorders_core.api.routes.payments import router as payments_router
+from touchorders_core.api.routes.lifecycle import router as lifecycle_router
 from touchorders_core.llm.gateway import LLMGateway
 from touchorders_core.observability.logging import configure_logging, get_logger
 from touchorders_core.settings import Settings, get_settings
@@ -40,6 +45,8 @@ def create_app(
     identity_verifier: IdentityVerifier | None = None,
     entitlement_service = None,
     order_service = None,
+    payment_service = None,
+    lifecycle_service = None,
 ) -> FastAPI:
     """Create the BFF application.
 
@@ -52,10 +59,33 @@ def create_app(
     configure_logging(level=runtime_settings.log_level, json_output=runtime_settings.log_json)
     logger = get_logger(__name__)
 
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        if payment_service is not None:
+            async def sweep() -> None:
+                while True:
+                    try:
+                        await run_in_threadpool(payment_service.sweep_expired)
+                    except Exception as exc:
+                        logger.warning("payment_reservation_sweep_failed", error=str(exc))
+                    await asyncio.sleep(30)
+            app.state.payment_sweeper_task = asyncio.create_task(sweep())
+        try:
+            yield
+        finally:
+            task = app.state.payment_sweeper_task
+            if task is not None:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+
     app = FastAPI(
         title="TouchOrders Agent Core",
         version=__version__,
         description="Deterministic restaurant operations core with schema-constrained AI edges.",
+        lifespan=lifespan,
     )
     app.add_middleware(
         CORSMiddleware,
@@ -68,8 +98,14 @@ def create_app(
     app.state.identity_verifier = identity_verifier
     app.state.entitlement_service = entitlement_service
     app.state.order_service = order_service
+    app.state.lifecycle_service = lifecycle_service
+    app.state.payment_service = payment_service
+    app.state.payment_sweeper_task = None
+
     app.include_router(ai_router)
     app.include_router(orders_router)
+    app.include_router(payments_router)
+    app.include_router(lifecycle_router)
 
     @app.get("/health", response_model=HealthResponse, tags=["health"])
     async def health() -> HealthResponse:
@@ -107,5 +143,15 @@ def create_app(
         except Exception as exc:
             raise HTTPException(503, "Order database is unavailable") from exc
         return {"status": "healthy", "firebase": "ok", "database": "ok"}
+
+    @app.get("/health/payments", tags=["health"])
+    async def payment_readiness() -> dict[str, str]:
+        if payment_service is None:
+            raise HTTPException(503, "Payment service is unconfigured")
+        try:
+            await run_in_threadpool(payment_service.ready)
+        except Exception as exc:
+            raise HTTPException(503, "Verified QR Ph is unavailable") from exc
+        return {"status": "healthy", "firebase": "ok", "paymongo": "ok"}
 
     return app

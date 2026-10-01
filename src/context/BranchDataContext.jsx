@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo } from 'react';
+import { createContext, useContext, useEffect, useMemo } from 'react';
 import { useAnalyticsProcessor } from '../hooks/useAnalyticsProcessor';
 import { useInventoryProcessor } from '../hooks/useInventoryProcessor';
 import { formatDateKey, formatWeekKey, formatMonthKey, onAnalyticsChange, onAnalyticsExclusionsChange, applyExclusions } from '../lib/analyticsApi';
@@ -8,6 +8,7 @@ import { detectPatterns } from '../lib/patternInsights';
 import { setBranchContext } from '../lib/firebase';
 import { useLiveResource } from '../hooks/useLiveResource';
 import { useAuth } from './AuthContext';
+import { recordBranchActivity } from '../lib/lifecycleApi';
 
 const BranchDataContext = createContext(null);
 const EMPTY_OBJECT = {};
@@ -35,6 +36,11 @@ export function BranchDataProvider({ branchId, children }) {
   const logs = logsResource.data;
   const deletedLogs = trashResource.data;
   const exclusions = exclusionsResource.data;
+  useEffect(() => {
+    if (workspace?.companyId && branchId && logsResource.status === 'ready' && inventoryResource.status === 'ready') {
+      recordBranchActivity(workspace.companyId, branchId, 'operation').catch(() => {});
+    }
+  }, [workspace?.companyId, branchId, logs, inventory]);
   const inventoryLoaded = inventoryResource.status === 'ready';
   const logsLoaded = logsResource.status === 'ready';
 

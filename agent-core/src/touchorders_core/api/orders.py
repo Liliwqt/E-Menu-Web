@@ -40,11 +40,97 @@ def _stock(value) -> int:
     return int(number)
 
 
+def validate_branch_id(company: str, branch: str) -> None:
+    if not _ID.fullmatch(company) or not _ID.fullmatch(branch):
+        raise HTTPException(400, "Invalid branch")
+
+
+def price_order(current: dict, body) -> tuple[list[dict], Decimal, dict[tuple[str, str, str], int]]:
+    """Reprice an untrusted device cart from the current menu."""
+    categories = current.get("categories") or {}
+    stock_changes: dict[tuple[str, str, str], int] = defaultdict(int)
+    lines: list[dict] = []
+    total = Decimal("0.00")
+    for item in body.items:
+        category, item_id, size = item.categoryId, item.itemId, item.size
+        if not _SEGMENT.fullmatch(category) or not _SEGMENT.fullmatch(item_id) or (size and not _SEGMENT.fullmatch(size)):
+            raise HTTPException(400, "Invalid item identifier")
+        menu_item = (categories.get(category) or {}).get(item_id)
+        if not isinstance(menu_item, dict) or not menu_item.get("name"):
+            raise HTTPException(409, "An item is no longer on the menu")
+        if menu_item.get("available") is False or menu_item.get("manualUnavailable") is True:
+            raise HTTPException(409, "An item is unavailable")
+        sizes = menu_item.get("sizes") or {}
+        if sizes:
+            if size not in sizes:
+                raise HTTPException(409, "An item size changed")
+            size_value = sizes[size]
+            modifier = size_value.get("priceModifier", 0) if isinstance(size_value, dict) else size_value
+        elif size:
+            raise HTTPException(409, "An item size changed")
+        else:
+            modifier = 0
+        unit = _money(menu_item.get("price")) + _money(modifier)
+        if unit < 0 or unit != _money(item.expectedUnitPrice):
+            raise HTTPException(409, "An item price changed; refresh the menu")
+        subtotal = unit * item.quantity
+        total += subtotal
+        lines.append({"name": str(menu_item["name"])[:120], "size": size, "quantity": item.quantity,
+                      "price": float(unit), "subtotal": float(subtotal)})
+        stock_changes[(category, item_id, size or "Medium")] += item.quantity
+    if total > Decimal("1000000.00") or total != _money(body.expectedTotal):
+        raise HTTPException(409, "Order total changed; review the cart")
+    return lines, total, stock_changes
+
+
+def decrement_inventory(branch: dict, stock_changes: dict[tuple[str, str, str], int]) -> None:
+    inventory = branch.setdefault("inventory", {})
+    for (category, item_id, size), quantity in stock_changes.items():
+        inventory_item = (inventory.get(category) or {}).get(item_id)
+        if inventory_item is None:
+            continue
+        record = (inventory_item.get("sizes") or {}).get(size)
+        if record is None:
+            raise HTTPException(409, "Selected size is not tracked in inventory")
+        stock = _stock(record.get("stock", record.get("currentStock"))) if isinstance(record, dict) else _stock(record)
+        if stock < quantity:
+            raise HTTPException(409, "Insufficient inventory stock")
+        if isinstance(record, dict):
+            record["stock"] = stock - quantity
+            if "currentStock" in record:
+                record["currentStock"] = stock - quantity
+        else:
+            inventory_item["sizes"][size] = stock - quantity
+
+
+def restore_inventory(branch: dict, stock_changes: list[dict]) -> None:
+    inventory = branch.setdefault("inventory", {})
+    for change in stock_changes:
+        inventory_item = (inventory.get(change["categoryId"]) or {}).get(change["itemId"])
+        if inventory_item is None:
+            continue
+        size = change["size"]
+        record = (inventory_item.get("sizes") or {}).get(size)
+        if record is None:
+            continue
+        quantity = int(change["quantity"])
+        stock = _stock(record.get("stock", record.get("currentStock"))) if isinstance(record, dict) else _stock(record)
+        if isinstance(record, dict):
+            record["stock"] = stock + quantity
+            if "currentStock" in record:
+                record["currentStock"] = stock + quantity
+        else:
+            inventory_item["sizes"][size] = stock + quantity
+
+
 class FirebaseOrderService:
     def __init__(self, database):
         self.db = database
 
-    def _check_external_access(self, uid: str, company: str, branch: str) -> None:
+    def check_external_access(self, uid: str, company: str, branch: str) -> None:
+        if (self.db.reference("lifecycleMaintenance/enabled").get() is True
+                or (self.db.reference(f"{company}/branches/{branch}/lifecycle/status").get() in {"closing", "deleting", "deleted"})):
+            raise HTTPException(403, "Branch closure or maintenance is in progress. Ordering is paused.")
         pointer = self.db.reference(f"kioskEnrollments/{uid}").get() or {}
         if (pointer.get("companyId") != company or pointer.get("branchId") != branch
                 or pointer.get("isActive") is not True):
@@ -62,9 +148,8 @@ class FirebaseOrderService:
 
     def submit(self, *, uid: str, body) -> dict:
         company, branch = body.companyId, body.branchId
-        if not _ID.fullmatch(company) or not _ID.fullmatch(branch):
-            raise HTTPException(400, "Invalid branch")
-        self._check_external_access(uid, company, branch)
+        validate_branch_id(company, branch)
+        self.check_external_access(uid, company, branch)
         outcome = {"duplicate": False}
         attempts = 0
         path = f"{company}/branches/{branch}"
@@ -74,9 +159,11 @@ class FirebaseOrderService:
             attempts += 1
             # The Admin SDK retries this callback on contention. Recheck the
             # entitlement and root enrollment on every attempt, close to commit.
-            self._check_external_access(uid, company, branch)
+            self.check_external_access(uid, company, branch)
             if not isinstance(current, dict):
                 raise HTTPException(404, "Branch was not found")
+            from touchorders_core.api.lifecycle import assert_open
+            assert_open(current)
             branch_bytes = len(json.dumps(current, separators=(",", ":")).encode("utf-8"))
             if branch_bytes > 1_000_000:
                 logger.warning("order_branch_transaction_large", bytes=branch_bytes)
@@ -94,75 +181,23 @@ class FirebaseOrderService:
                 # transaction makes no ledger or stock change.
                 return current
 
-            categories = current.get("categories") or {}
-            inventory = current.get("inventory") or {}
-            lines = []
-            stock_changes = defaultdict(int)
-            total = Decimal("0.00")
-            for item in body.items:
-                category, item_id, size = item.categoryId, item.itemId, item.size
-                if not _SEGMENT.fullmatch(category) or not _SEGMENT.fullmatch(item_id) or (
-                    size and not _SEGMENT.fullmatch(size)
-                ):
-                    raise HTTPException(400, "Invalid item identifier")
-                menu_item = (categories.get(category) or {}).get(item_id)
-                if not isinstance(menu_item, dict) or not menu_item.get("name"):
-                    raise HTTPException(409, "An item is no longer on the menu")
-                if menu_item.get("available") is False or menu_item.get("manualUnavailable") is True:
-                    raise HTTPException(409, "An item is unavailable")
-                sizes = menu_item.get("sizes") or {}
-                if sizes:
-                    if size not in sizes:
-                        raise HTTPException(409, "An item size changed")
-                    size_value = sizes[size]
-                    modifier = size_value.get("priceModifier", 0) if isinstance(size_value, dict) else size_value
-                elif size:
-                    raise HTTPException(409, "An item size changed")
-                else:
-                    modifier = 0
-                unit = _money(menu_item.get("price")) + _money(modifier)
-                if unit < 0 or unit != _money(item.expectedUnitPrice):
-                    raise HTTPException(409, "An item price changed; refresh the menu")
-                subtotal = unit * item.quantity
-                total += subtotal
-                lines.append({
-                    "name": str(menu_item["name"])[:120], "size": size,
-                    "quantity": item.quantity, "price": float(unit),
-                    "subtotal": float(subtotal),
-                })
-                stock_changes[(category, item_id, size or "Medium")] += item.quantity
-
-            if total > Decimal("1000000.00") or total != _money(body.expectedTotal):
-                raise HTTPException(409, "Order total changed; review the cart")
+            lines, total, stock_changes = price_order(current, body)
             next_branch = copy.deepcopy(current)
-            next_inventory = next_branch.setdefault("inventory", {})
-            for (category, item_id, size), quantity in stock_changes.items():
-                inventory_item = (next_inventory.get(category) or {}).get(item_id)
-                if inventory_item is None:
-                    continue  # Legacy item without tracked stock.
-                record = (inventory_item.get("sizes") or {}).get(size)
-                if record is None:
-                    raise HTTPException(409, "Selected size is not tracked in inventory")
-                if isinstance(record, dict):
-                    stock = _stock(record.get("stock", record.get("currentStock")))
-                else:
-                    stock = _stock(record)
-                if stock < quantity:
-                    raise HTTPException(409, "Insufficient inventory stock")
-                if isinstance(record, dict):
-                    record["stock"] = stock - quantity
-                    if "currentStock" in record:
-                        record["currentStock"] = stock - quantity
-                else:
-                    inventory_item["sizes"][size] = stock - quantity
+            if next_branch.get("lifecycle"):
+                next_branch["lifecycle"]["lastActivityAt"] = int(time.time() * 1000)
+                if next_branch["lifecycle"].get("status") not in {"closing", "deleting"}:
+                    next_branch["lifecycle"]["status"] = "active"
+                    next_branch["lifecycle"].pop("deleteAt", None)
+            decrement_inventory(next_branch, stock_changes)
 
-            method = body.paymentMethod
+            if body.paymentMethod != "COUNTER":
+                raise HTTPException(400, "QR Ph orders must use the verified payment checkout")
             order = {
                 "orderId": str(body.orderId), "submittedByUid": uid,
                 "orderNumber": str(body.orderId)[:8].upper(),
                 "customerName": body.customerName, "items": lines,
-                "total": float(total), "paymentMethod": method,
-                "paymentStatus": "CUSTOMER_REPORTED_PAID" if method == "QR_CODE" else "PAY_AT_COUNTER",
+                "total": float(total), "paymentMethod": "COUNTER",
+                "paymentStatus": "PAY_AT_COUNTER",
                 "timestamp": int(time.time() * 1000), "inventoryProcessed": True,
                 "inventoryProcessedAt": int(time.time() * 1000), "orderSource": "android_kiosk",
             }

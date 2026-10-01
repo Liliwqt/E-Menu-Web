@@ -58,6 +58,7 @@ const server = await createServer({
   plugins: [
     { name: 'isolated-workflow-fixture', enforce: 'pre', transform(code, id) {
       if (id.endsWith('/src/context/AuthContext.jsx')) return authSource;
+    if (id.endsWith('/src/lib/lifecycleApi.js')) return code.replace(/export async function reauthenticateLifecycle[\s\S]*?(?=export const recordBranchActivity)/, 'export async function reauthenticateLifecycle(password) { if (password !== "fixture-password") throw new Error("Incorrect password"); }\n');
       if (id.endsWith('/src/lib/menuApi.js')) return code.replace(
         'export function onCategoriesChange(branchId, callback, onError) {',
         'export function onCategoriesChange(branchId, callback, onError) { const originalCallback = callback; const delay = window.__uxDelay || 0; callback = (...args) => setTimeout(() => originalCallback(...args), delay);'
@@ -108,7 +109,13 @@ try {
     const token = `${Buffer.from(JSON.stringify({alg:'none',typ:'JWT'})).toString('base64url')}.${Buffer.from(JSON.stringify(payload)).toString('base64url')}.`;
     await context.addInitScript(({role,token}) => { window.__uxRole=role; window.__uxToken=token; }, {role,token});
     // This test may only contact local services; Firebase production traffic is refused.
-    await context.route('**/*', route => {
+    await context.route('**/*', async route => {
+      if (process.env.LIFECYCLE_FIXTURE_URL && new URL(route.request().url()).pathname.startsWith('/api/lifecycle')) {
+        const target = process.env.LIFECYCLE_FIXTURE_URL + new URL(route.request().url()).pathname;
+        const response = await context.request.fetch(target, {method:route.request().method(),
+          data:route.request().postData() || undefined, headers:{'Content-Type':'application/json', Authorization:`Bearer ${role}`}});
+        return route.fulfill({response});
+      }
       const host = new URL(route.request().url()).hostname;
       return ['127.0.0.1','localhost'].includes(host) ? route.continue() : route.abort();
     });
@@ -119,23 +126,17 @@ try {
     await page.goto('http://127.0.0.1:5188/subscription/main');
     await page.getByRole('heading', { name: 'Subscription', exact: true }).waitFor();
     await page.getByText('Basic plan active', { exact: true }).waitFor();
-    const cancellation = page.getByRole('link', { name: 'Email cancellation request', exact: true });
+    const cancellation = page.getByRole('button', { name: 'Cancel branch subscription', exact: true });
     assert.equal(await cancellation.count(), role === 'owner' ? 1 : 0);
     if (role === 'owner') {
       const before = await api(`billingEntitlements/${company}`);
-      const email = new URL(await cancellation.getAttribute('href'));
-      assert.equal(email.pathname, 'touch.support1@gmail.com');
-      assert.ok(email.searchParams.get('body').includes(`Branch ID: ${branch}`));
-      // Observe a real click without opening an external email app or sending mail.
-      await cancellation.evaluate(el => el.addEventListener('click', event => { event.preventDefault(); window.__cancellationClicked = true; }));
       await cancellation.click();
-      assert.equal(await page.evaluate(() => window.__cancellationClicked), true);
+      await page.getByRole('dialog', { name: 'Cancel subscription', exact: true }).waitFor();
+      assert.equal(await page.getByRole('button', { name: 'Confirm', exact: true }).isDisabled(), true);
+      await page.getByRole('button', { name: 'Keep current access', exact: true }).click();
       await page.reload();
       await page.getByText('Basic plan active', { exact: true }).waitFor();
       assert.deepEqual(await api(`billingEntitlements/${company}`), before);
-      await page.goto('http://127.0.0.1:5188/subscription/second');
-      await page.getByText('Basic plan active', { exact: true }).waitFor();
-      assert.ok(new URL(await cancellation.getAttribute('href')).searchParams.get('body').includes(`Branch ID: ${second}`));
     }
     await page.goto('http://127.0.0.1:5188/menu/main');
     await page.getByRole('button',{name:'Mark Coffee sold out',exact:true}).waitFor();
@@ -189,7 +190,7 @@ try {
     assert.match(await dialog.innerText(),/Current.*18 units/s);
     assert.match(await dialog.innerText(),/After saving.*20 units/s);
     if (role === 'staff') {
-      const denied = rules.replace(/"\.write"\s*:\s*"[^"]*"/g, '".write": false');
+      const denied = rules.replace(/"\.write"\s*:\s*"(?:\\.|[^"\\])*"/g, '".write": false');
       const response = await fetch(`${root}/.settings/rules.json?ns=demo-menu-kiosk`, {method:'PUT',headers:{Authorization:'Bearer owner'},body:denied});
       assert.ok(response.ok);
       await page.getByRole('button',{name:'Save changes',exact:true}).click();
@@ -285,6 +286,67 @@ try {
     }
     await context.close();
     console.log(`PASS ${role}: real routes, filters, stock preview/save, focus, branch reset, responsive themes`);
+  }
+  if (process.env.LIFECYCLE_FIXTURE_URL) {
+    const sessions = [];
+    for (const role of ['owner','manager']) {
+      const context = await browser.newContext({viewport:{width:390,height:844},acceptDownloads:true});
+      await context.addInitScript(role => { window.__uxRole=role; }, role);
+      await context.route('**/*', async route => {
+        const url = new URL(route.request().url());
+        if (url.pathname.startsWith('/api/lifecycle')) {
+          const response = await context.request.fetch(process.env.LIFECYCLE_FIXTURE_URL + url.pathname, {
+            method:route.request().method(), data:route.request().postData() || undefined,
+            headers:{'Content-Type':'application/json',Authorization:`Bearer ${role}`},
+          });
+          return route.fulfill({response});
+        }
+        return ['localhost','127.0.0.1'].includes(url.hostname) ? route.continue() : route.abort();
+      });
+      const page = await context.newPage();
+      page.on('pageerror', e => pageErrors.push(`lifecycle ${role}: ${e.message}`));
+      await page.goto('http://127.0.0.1:5188/subscription/main');
+      await page.getByText('Basic plan active',{exact:true}).waitFor();
+      sessions.push({context,page});
+    }
+    const [ownerSession, managerSession] = sessions;
+    const ownerPage = ownerSession.page;
+    const subscriptionBefore = await api(`billingEntitlements/${company}`);
+    await ownerPage.getByRole('button',{name:'Download this branch',exact:true}).click();
+    await ownerPage.getByText('Download ready.',{exact:true}).waitFor();
+    await ownerPage.getByRole('button',{name:'Cancel branch subscription',exact:true}).click();
+    await ownerPage.getByLabel('Confirm your password').fill('fixture-password');
+    await ownerPage.getByRole('button',{name:'Confirm',exact:true}).click();
+    await managerSession.page.getByText('Subscription cancelled — read-only',{exact:true}).waitFor();
+    await managerSession.page.goto('http://127.0.0.1:5188/menu/main');
+    await managerSession.page.getByText('Coffee',{exact:true}).waitFor();
+    assert.equal(await managerSession.page.getByRole('button',{name:/Rename|Delete|Add category/}).count(),0);
+    await managerSession.page.goto('http://127.0.0.1:5188/subscription/main');
+    await managerSession.page.getByText('Subscription cancelled — read-only',{exact:true}).waitFor();
+    await api(`billingEntitlements/${company}`,'PUT',subscriptionBefore);
+    await api(`${company}/branches/${branch}/lifecycle/billingBlocked`,'PUT',false);
+    await ownerPage.getByText('Basic plan active',{exact:true}).waitFor();
+    await ownerPage.getByRole('button',{name:'Close business',exact:true}).click();
+    await ownerPage.getByLabel('Confirm your password').fill('fixture-password');
+    await ownerPage.getByRole('button',{name:'Confirm',exact:true}).click();
+    await managerSession.page.getByText('Access paused — read-only',{exact:true}).waitFor();
+    await ownerPage.screenshot({path:`${out}/lifecycle-closing-phone.png`,fullPage:true});
+    await ownerPage.getByRole('button',{name:'Recover access',exact:true}).click();
+    await ownerPage.getByLabel('Confirm your password').fill('fixture-password');
+    await ownerPage.getByRole('button',{name:'Confirm',exact:true}).click();
+    await managerSession.page.getByText('Basic plan active',{exact:true}).waitFor();
+    assert.deepEqual(await api(`billingEntitlements/${company}`), subscriptionBefore);
+    const state = await api(`${company}/branches/${branch}/lifecycle`);
+    await api(`${company}/branches/${branch}/lifecycle`,'PUT', {...state,status:'inactivity_grace',warningAcceptedAt:Date.now(),deleteAt:Date.now()+86400000});
+    await ownerPage.getByText(/Deadline:.*Philippine time/).waitFor();
+    await ownerPage.screenshot({path:`${out}/lifecycle-inactivity-phone.png`,fullPage:true});
+    await ownerPage.getByRole('button',{name:'Recover access',exact:true}).click();
+    await ownerPage.getByLabel('Confirm your password').fill('fixture-password');
+    await ownerPage.getByRole('button',{name:'Confirm',exact:true}).click();
+    await ownerPage.getByText('Recovery confirmed. Subscription expiry is unchanged.',{exact:true}).waitFor();
+    assert.equal((await api(`${company}/branches/${branch}/lifecycle`)).status,'active');
+    for (const session of sessions) await session.context.close();
+    console.log('PASS lifecycle: real backend export, owner cancellation, live manager access gates, business closure and recovery');
   }
   const after=await api(`${company}/branches/${branch}`);
   assert.deepEqual(after.logs,baseline.logs);

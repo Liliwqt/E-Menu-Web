@@ -42,8 +42,8 @@ class OrderRequest(BaseModel):
     @field_validator("paymentMethod")
     @classmethod
     def known_payment_method(cls, value: str) -> str:
-        if value not in ("QR_CODE", "COUNTER"):
-            raise ValueError("Unknown payment method")
+        if value != "COUNTER":
+            raise ValueError("QR Ph orders must use the verified payment checkout")
         return value
 
 

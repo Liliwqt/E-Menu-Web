@@ -143,7 +143,7 @@ const SECTIONS = [
       },
       {
         heading: 'What it does',
-        text: 'A list of every single order.\n\n• Search recorded orders and review payment statuses.\n• QR payment is customer-reported; pay-at-counter requires staff collection.\n• These records do not verify settlement or balance a cash drawer.',
+        text: 'A list of every single order.\n\n• Search recorded orders and review payment statuses.\n• New QR Ph orders are recorded after PayMongo confirms payment.\n• Legacy reported-QR and pay-at-counter records are unverified; they do not balance a cash drawer.',
       }
     ],
   },

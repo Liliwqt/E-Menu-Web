@@ -9,13 +9,14 @@ import {
   isSubscriptionActive, isTrialEndingSoon, trialDaysRemaining,
 } from '../lib/planFeatures';
 import { CAP } from '../lib/permissions';
-import { PUBLICATION, subscriptionCancellationEmail } from '../lib/publicSiteContent';
+import LifecycleControls from '../components/ui/LifecycleControls';
+import LifecycleBanner from '../components/ui/LifecycleBanner';
 import '../styles/subscription.css';
 
 const PLANS = [
   { id: PLAN_BASIC, name: 'Basic', features: [
     'Menu, inventory, orders, team and device management',
-    'Order payment status records (not verified settlement)',
+    'Verified QR Ph status when connected; pay-at-counter remains unverified',
     'Revenue graphs and standard reports',
   ] },
   { id: PLAN_STARTER, name: 'Starter', features: [
@@ -56,9 +57,10 @@ export default function SubscriptionPage() {
           <p className="sub__subtitle">Plans are monthly per branch. All active plans include daily operations.</p>
         </div>
       </header>
+      <LifecycleBanner />
       <div className={`sub__trial ${ending || !active ? 'is-ending' : ''}`} role="status">
         <div>
-          <strong>{active ? `${billing.plan[0].toUpperCase() + billing.plan.slice(1)} ${billing.subscriptionStatus === 'trialing' ? 'trial' : 'plan'} active` : 'Plan expired — read-only'}</strong>
+          <strong>{active ? `${billing.plan[0].toUpperCase() + billing.plan.slice(1)} ${billing.subscriptionStatus === 'trialing' ? 'trial' : 'plan'} active` : billing.subscriptionStatus === 'cancelled' ? 'Subscription cancelled — read-only' : 'Access paused — read-only'}</strong>
           {' · '}{active && billing.subscriptionStatus === 'trialing' ? `${days} day${days === 1 ? '' : 's'} left; ends ${expiry}` : `Period ends ${expiry}`}
           {!active && '. Existing records remain visible. New operations and AI are paused until payment is activated.'}
         </div>
@@ -82,13 +84,8 @@ export default function SubscriptionPage() {
           ? <>To activate or renew, arrange payment with the service operator. Give them company ID <strong>{workspace.companyId}</strong> and branch ID <strong>{branchId}</strong>. Access changes only after payment is verified.</>
           : 'Ask the business owner to arrange a plan change or renewal.'}
       </div>
-      <p className="sub__subtitle">Order payment statuses mean customer-reported QR payment or pay-at-counter. They do not confirm that money was received.</p>
-      {owner && <section className="sub__cancellation" aria-labelledby="cancellation-title">
-        <h2 id="cancellation-title">Request cancellation</h2>
-        <p>Opens your email app. Send the request to support; your subscription stays unchanged until the operator processes and confirms cancellation.</p>
-        <a className="sub__btn sub__btn--ghost" href={subscriptionCancellationEmail(workspace.companyId, branchId)}>Email cancellation request</a>
-        <p>If your email app does not open, email <a href={`mailto:${PUBLICATION.supportEmail}`}>{PUBLICATION.supportEmail}</a> with your company and branch IDs. Support hours: {PUBLICATION.supportHours}. Processing time is not yet defined.</p>
-      </section>}
+      <p className="sub__subtitle">New QR Ph orders are recorded only after PayMongo confirmation. Pay-at-counter and legacy customer-reported QR records remain unverified.</p>
+      <LifecycleControls />
     </div>
   );
 }
