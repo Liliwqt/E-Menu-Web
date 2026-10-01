@@ -9,10 +9,13 @@
  * an empty default would produce a same-origin relative path (e.g. localhost:5173/api/ai/...),
  * which 404s because that route exists only on Railway. Override VITE_API_BASE_URL for staging.
  * The client sends the signed-in user's Firebase ID token (via fetchWithAppCheck); FastAPI verifies it.
+ *
+ * The origin lives in `apiBase.js`. It used to be hardcoded here, pointing at a
+ * Railway service that no longer exists, which 404'd every AI request in
+ * production while the backend itself was healthy.
  */
 
-const RAILWAY_BACKEND = 'https://ai-operations-management-platform-production.up.railway.app';
-const API_BASE = import.meta.env.VITE_API_BASE_URL || RAILWAY_BACKEND;
+import { API_BASE } from './apiBase';
 
 export const pilotAiConfig = {
   model: 'gpt-4o-mini',

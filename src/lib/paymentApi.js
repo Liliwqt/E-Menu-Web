@@ -1,6 +1,5 @@
 import { fetchWithAppCheck } from './firebase';
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://e-menu-web-production.up.railway.app';
+import { API_BASE } from './apiBase';
 
 async function paymentRequest(path, options = {}) {
   const response = await fetchWithAppCheck(`${API_BASE}${path}`, {

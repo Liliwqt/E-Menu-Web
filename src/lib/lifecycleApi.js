@@ -1,9 +1,9 @@
 import { auth, fetchWithAppCheck } from './firebase';
 import { isEmbeddedInApp } from './deviceBridge';
 import { EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
-const BASE = import.meta.env.VITE_API_BASE_URL || 'https://e-menu-web-production.up.railway.app';
+import { API_BASE } from './apiBase';
 async function request(path, body, binary = false) {
-  const response = await fetchWithAppCheck(`${BASE}/api/lifecycle${path}`, body ? {
+  const response = await fetchWithAppCheck(`${API_BASE}/api/lifecycle${path}`, body ? {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
   } : {});
   if (!response.ok) {
