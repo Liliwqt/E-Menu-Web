@@ -26,7 +26,7 @@ DAY = 86_400_000
 BLOCKED = {"closing", "deleting", "deleted"}
 FINAL_PAYMENT = {"paid", "succeeded", "cancelled", "expired", "failed"}
 LOGGER = logging.getLogger(__name__)
-PRIVATE_ROOTS = ("billingEntitlements", "subscriptionPayments", "premiumInsights", "aiUsage", "paymentRefunds")
+PRIVATE_ROOTS = ("billingEntitlements", "subscriptionPayments", "premiumInsights", "aiUsage", "aiRequests", "paymentRefunds")
 
 
 def utc_ms():
@@ -163,6 +163,7 @@ def purge_branch(root, company, branch, now, operator):
     for record in (root.get("lifecycleExports") or {}).values():
         if record.get("companyId") == company and (not record.get("branchId") or record.get("branchId") == branch):
             record.update(expiresAt=0, revokedAt=now)
+    ((root.get("aiControls") or {}).get("branches") or {}).pop(f"{company}_{branch}",None)
     business["branches"].pop(branch, None)
     for key in PRIVATE_ROOTS:
         ((root.get(key) or {}).get(company) or {}).pop(branch, None)
@@ -530,13 +531,8 @@ class LifecycleService:
         return sorted(set(result))
 
     def _clean_exports_and_auth(self):
-        for company, branches in (self.db.reference('premiumInsights').get() or {}).items():
-            for branch, records in branches.items():
-                keys = sorted(records, key=lambda k: records[k].get('at', 0))
-                expired = set(k for k in keys if records[k].get('at', 0) <= self.clock() - 90 * DAY)
-                expired.update(keys[:-100])
-                for key in expired:
-                    self.db.reference(f'premiumInsights/{company}/{branch}/{key}').delete()
+        from touchorders_core.api.insight_retention import purge_insights
+        purge_insights(self.db,self.clock())
         for key, record in (self.db.reference("lifecycleExports").get() or {}).items():
             if record.get("expiresAt", 0) <= self.clock() and self.storage:
                 self.storage.delete(f"exports/{key}")

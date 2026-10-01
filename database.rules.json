@@ -1,5 +1,7 @@
 {
   "rules": {
+    "aiRequests": { ".read": false, ".write": false },
+    "aiControls": { ".read": false, ".write": false },
     // RULES_VERSION: lifecycle-v1 (2026-10-01). Admin-only lifecycle; direct branch deletion denied.
     "users": {
       "$uid": {

@@ -1,6 +1,8 @@
 import { initializeApp, deleteApp, getApps } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { getDatabase } from 'firebase/database';
+import { API_BASE } from './apiBase';
+import { createBackendTransport } from './backendTransport.js';
 
 export const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -36,33 +38,16 @@ const databaseURL = firebaseConfig.databaseURL;
 
 // Kept its name for existing callers; it now attaches only the signed-in user's Firebase ID token.
 export async function fetchWithAppCheck(url, options = {}) {
-  // Get the auth token
-  let authToken = null;
-  try {
-    if (auth.currentUser) {
-      authToken = await auth.currentUser.getIdToken();
-    }
-  } catch (e) {
-    // This might happen if user just logged out or token expired
-    console.warn('Auth token retrieval failed:', e);
+  const target = new URL(url);
+  const rtdb = databaseURL ? new URL(databaseURL) : null;
+  if (rtdb && target.origin === rtdb.origin && target.pathname.endsWith('.json')) {
+    if (target.username || target.password || target.searchParams.has('auth')) throw new Error('Invalid database destination');
+    const token = await auth.currentUser?.getIdToken();
+    if (!token) throw new Error('Sign-in required');
+    target.searchParams.set('auth', token);
+    return fetch(target.href, { ...options, redirect: 'error' });
   }
-
-  const headers = new Headers(options.headers || {});
-
-  // Attach the auth token. Firebase RTDB REST requires it as the ?auth= query param; every
-  // other backend (the FastAPI BFF) gets it as an Authorization header instead, so the token
-  // never appears in URLs, access logs, or proxy logs.
-  let finalUrl = url;
-  if (authToken) {
-    if (databaseURL && url.startsWith(databaseURL)) {
-      const separator = finalUrl.includes('?') ? '&' : '?';
-      finalUrl = `${finalUrl}${separator}auth=${authToken}`;
-    } else {
-      headers.set('Authorization', `Bearer ${authToken}`);
-    }
-  }
-
-  return fetch(finalUrl, { ...options, headers });
+  return createBackendTransport({ base: API_BASE, getToken: () => auth.currentUser?.getIdToken() })(url, options);
 }
 
 export function dbUrl(path) {

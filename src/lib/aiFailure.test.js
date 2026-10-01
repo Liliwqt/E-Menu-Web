@@ -54,11 +54,8 @@ describe('a response that came back refusing', () => {
 });
 
 describe('falling back', () => {
-  it('prefers the backend\'s own words when there are any, as they are specific', () => {
-    assert.match(
-      describeAiFailure({ status: 400, detail: 'model is unavailable' }),
-      /model is unavailable/
-    );
+  it('never echoes arbitrary backend text', () => {
+    assert.doesNotMatch(describeAiFailure({ status: 400, detail: 'CANARY api_key=secret user@example.com' }), /CANARY|secret|user@example/);
   });
 
   it('still says something when handed nothing at all', () => {

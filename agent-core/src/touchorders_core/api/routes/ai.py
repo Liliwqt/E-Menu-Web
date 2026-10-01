@@ -1,150 +1,382 @@
-"""BFF AI endpoint (§13.4): the dashboard/tablet call FastAPI, never OpenAI directly.
-
-The client sends the same chat-completions-shaped request it used to send to OpenAI; here the
-Firebase ID token is verified, the call is routed through the single LLM Gateway (server-held key,
-budget, ledger), and the OpenAI-shaped response the dashboard already parses is returned.
-"""
+"""Authenticated analysis BFF. Provider instructions and context are server-owned."""
 
 from __future__ import annotations
-
-import json
-from typing import Any
-
-from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, Field
-
+import hashlib, json, time, threading
+from collections import OrderedDict
+from datetime import datetime, timezone
+from typing import Literal
+from uuid import UUID
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from pydantic import BaseModel, ConfigDict, Field
 from touchorders_core.api.auth import IdentityError, IdentityVerifier, VerifiedIdentity
+from touchorders_core.api.ai_context import build_context
+from touchorders_core.api.ai_schemas import TOKENS, system_prompt, validate_analysis
 from touchorders_core.domain.enums import AgentName
 from touchorders_core.llm.budget import BudgetExceeded, LLMUnavailable
-from touchorders_core.llm.gateway import LLMGateway, describe_transport_failure
+from touchorders_core.llm.gateway import (
+    LLMGateway,
+    describe_transport_failure,
+    failed_before_transmission,
+)
 from touchorders_core.observability.logging import get_logger
+from touchorders_core.observability.privacy import safe_input
 
 logger = get_logger(__name__)
-
 router = APIRouter(prefix="/api/ai", tags=["ai"])
+Mode = Literal[
+    "realtime", "live", "deep", "executive", "briefing", "leak", "simulation", "opschat"
+]
+POLICY = {
+    "realtime": (1800, 180),
+    "live": (3300, 300),
+    "deep": (3600, 600),
+    "executive": (3600, 900),
+    "briefing": (86400, 86400),
+    "leak": (1800, 600),
+}
 
-ALLOWED_MODELS = {"gpt-4o-mini", "gpt-4o", "gpt-4.1-mini"}
-MAX_OUTPUT_TOKENS = 3000
 
-class ChatMessage(BaseModel):
-    role: str
-    content: str
+class Turn(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    role: Literal["user", "assistant"]
+    text: str = Field(max_length=400)
 
 
-class ChatCompletionRequest(BaseModel):
-    companyId: str
-    branchId: str
-    mode: str
-    requestId: str
-    model: str = "gpt-4o-mini"
-    messages: list[ChatMessage] = Field(min_length=1)
-    response_format: dict[str, Any] | None = None
-    max_tokens: int = 350
-    temperature: float = 0.35
+class AnalysisRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    companyId: str = Field(pattern=r"^company-[a-z0-9-]+$", max_length=128)
+    branchId: str = Field(pattern=r"^branch-[a-z0-9-]+$", max_length=128)
+    mode: Mode
+    requestId: str = Field(pattern=r"^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$")
+    question: str = Field(default="", max_length=2000)
+    conversation: list[Turn] = Field(default_factory=list, max_length=10)
+    forceRefresh: bool = False
+
+
+class AnalysisRuntime:
+    """Process memory only. Authorization is repeated on every cache hit."""
+
+    def __init__(self):
+        self.reports = OrderedDict()
+        self.completed = OrderedDict()
+        self.lock = threading.Lock()
+        self.status = {"state": "configured", "at": None, "category": None}
+
+    def get(self, cache, key, max_age):
+        with self.lock:
+            row = cache.get(key)
+            if row and time.monotonic() - row[0] < max_age:
+                cache.move_to_end(key)
+                return row[1]
+            cache.pop(key, None)
+
+    def put(self, cache, key, value):
+        with self.lock:
+            cache[key] = (time.monotonic(), value)
+            cache.move_to_end(key)
+            while len(cache) > 100:
+                cache.popitem(last=False)
+
+    def observed(self, state, category=None):
+        with self.lock:
+            self.status = dict(
+                state=state, at=int(time.time() * 1000), category=category
+            )
 
 
 def get_gateway(request: Request) -> LLMGateway:
-    gateway = getattr(request.app.state, "gateway", None)
+    gateway = request.app.state.gateway
     if gateway is None:
-        raise HTTPException(status_code=503, detail="AI backend is not configured")
+        raise HTTPException(503, "AI backend is not configured")
     return gateway
 
 
 def get_entitlements(request: Request):
-    service = getattr(request.app.state, "entitlement_service", None)
+    service = request.app.state.entitlement_service
     if service is None:
-        raise HTTPException(status_code=503, detail="Billing authorization is not configured")
+        raise HTTPException(503, "Billing authorization is not configured")
     return service
 
 
 def get_verifier(request: Request) -> IdentityVerifier:
-    verifier = getattr(request.app.state, "identity_verifier", None)
+    verifier = request.app.state.identity_verifier
     if verifier is None:
-        raise HTTPException(status_code=503, detail="Identity verification is not configured")
+        raise HTTPException(503, "Identity verification is not configured")
     return verifier
 
 
-def require_identity(request: Request, verifier: IdentityVerifier = Depends(get_verifier)) -> VerifiedIdentity:
-    # fetchWithAppCheck sends the ID token as ?auth=; also accept an Authorization bearer.
-    token = request.query_params.get("auth") or request.headers.get("authorization", "").removeprefix("Bearer ").strip()
-    if not token:
-        raise HTTPException(status_code=401, detail="Sign-in required")
+def require_identity(
+    request: Request, verifier: IdentityVerifier = Depends(get_verifier)
+) -> VerifiedIdentity:
+    if request.query_params:
+        raise HTTPException(400, "AI authentication requires an Authorization header")
+    header = request.headers.get("authorization", "")
+    if not header.startswith("Bearer ") or not header[7:].strip():
+        raise HTTPException(401, "Sign-in required")
     try:
-        return verifier.verify(token)
+        return verifier.verify(header[7:].strip())
     except IdentityError as exc:
-        raise HTTPException(status_code=401, detail="Invalid or expired session") from exc
+        raise HTTPException(401, "Invalid or expired session") from exc
 
 
-@router.post("/chat/completions")
-async def chat_completions(
-    body: ChatCompletionRequest,
+@router.post("/analysis")
+def analysis(
+    body: AnalysisRequest,
+    request: Request,
+    response: Response,
     identity: VerifiedIdentity = Depends(require_identity),
-    gateway: LLMGateway = Depends(get_gateway),
-    entitlements = Depends(get_entitlements),
-) -> dict[str, Any]:
-    grant = entitlements.reserve(uid=identity.uid, company=body.companyId,
-                                 branch=body.branchId, mode=body.mode, request_id=body.requestId)
-    system_prompt = next((m.content for m in body.messages if m.role == "system"), "")
-    if grant.plan == "starter":
-        system_prompt = ("Starter tier: discuss recorded revenue, order trends, potential revenue gaps, "
-                         "and general business suggestions only. Do not present inventory, staffing, "
-                         "simulations, live shift analysis, or executive presentations as included. "
-                         + system_prompt)
+    gateway=Depends(get_gateway),
+    entitlements=Depends(get_entitlements),
+):
     try:
-        memory = entitlements.context(grant)
-    except Exception as exc:
-        entitlements.refund(grant, body.requestId)
-        # The 503 alone cannot be acted on: four unrelated faults land here (unreadable
-        # insights, a model outage, a rejected key, an exhausted balance). The exception
-        # type is the only thing that separates them, and without this line the cause is
-        # invisible outside the process.
-        logger.error("ai_context_unavailable", error_type=type(exc).__name__, error=str(exc),
-                     uid=identity.uid, company=body.companyId, branch=body.branchId, mode=body.mode)
-        raise HTTPException(status_code=503, detail="Branch insights are temporarily unavailable") from exc
-    if memory:
-        system_prompt += "\nPrior dated branch insights (summaries only): " + json.dumps(memory)
-    user_prompt = next((m.content for m in body.messages if m.role == "user"), "")
-    if not user_prompt:
-        entitlements.refund(grant, body.requestId)
-        raise HTTPException(status_code=400, detail="a user message is required")
-
-    model = body.model if body.model in ALLOWED_MODELS else "gpt-4o-mini"
-    try:
-        content, input_tokens, output_tokens = gateway.analysis_completion(
-            agent=AgentName.BUSINESS_ANALYST, purpose="dashboard_analysis",
-            system_prompt=system_prompt, user_prompt=user_prompt, model=model,
-            max_output_tokens=min(int(body.max_tokens), MAX_OUTPUT_TOKENS), temperature=body.temperature,
-        )
-    except BudgetExceeded as exc:
-        entitlements.refund(grant, body.requestId)
-        logger.warning("ai_budget_exhausted", uid=identity.uid, company=body.companyId,
-                       branch=body.branchId, mode=body.mode)
-        raise HTTPException(status_code=429, detail="AI daily budget reached; please try later") from exc
-    except LLMUnavailable as exc:
-        entitlements.refund(grant, body.requestId)
-        logger.warning("ai_circuit_open", uid=identity.uid, company=body.companyId,
-                       branch=body.branchId, mode=body.mode, reason=str(exc))
-        raise HTTPException(status_code=503, detail="AI temporarily unavailable") from exc
-    except Exception as exc:
-        entitlements.refund(grant, body.requestId)
-        # OpenAI raises a distinct type per real fault (AuthenticationError for a bad key,
-        # RateLimitError, APIConnectionError), and each needs different action from the
-        # operator. Reporting them all as "AI generation failed" is what made an expired
-        # session, a spent account and a wrong key indistinguishable from the browser.
-        logger.error("ai_generation_failed", error_type=type(exc).__name__, error=str(exc),
-                     transport_failure=describe_transport_failure(exc),
-                     model=model, uid=identity.uid, company=body.companyId,
-                     branch=body.branchId, mode=body.mode,
-                     api_base_url=getattr(gateway, "openai_base_url", None))
-        raise HTTPException(status_code=503, detail="AI generation failed; please try again") from exc
-    try:
-        entitlements.remember(grant, mode=body.mode, content=content, request_id=body.requestId)
+        return _run_analysis(body, request, response, identity, gateway, entitlements)
+    except HTTPException:
+        raise
     except Exception:
-        # A memory write must never turn a completed model call into an apparent failure.
-        pass
+        logger.warning(
+            "ai_authorization_or_storage_failed",
+            request_id=body.requestId,
+            mode=body.mode,
+            category="database",
+        )
+        request.app.state.ai_runtime.observed("failed", "database")
+        raise HTTPException(
+            503, "AI authorization or storage is temporarily unavailable"
+        ) from None
 
-    # Return the OpenAI chat-completions shape the dashboard already parses (choices[0].message.content).
-    return {
-        "choices": [{"index": 0, "message": {"role": "assistant", "content": json.dumps(content)}, "finish_reason": "stop"}],
-        "usage": {"prompt_tokens": input_tokens, "completion_tokens": output_tokens},
-    }
+
+def _run_analysis(body, request, response, identity, gateway, entitlements):
+    # A synchronous endpoint runs provider and RTDB work in FastAPI's bounded thread pool.
+    response.headers["Cache-Control"] = "no-store"
+    started = time.monotonic()
+    try:
+        if str(UUID(body.requestId)) != body.requestId:
+            raise ValueError("request")
+        question = safe_input(body.question)
+        turns = [
+            dict(role=t.role, text=safe_input(t.text, limit=400))
+            for t in body.conversation
+        ]
+    except ValueError:
+        raise HTTPException(400, "Remove credentials or secret data from the question")
+    if body.mode not in ("opschat", "simulation") and (question or turns):
+        raise HTTPException(400, "Questions are supported only in chat and simulation")
+    if body.mode in ("opschat", "simulation") and not question:
+        raise HTTPException(400, "A business question is required")
+    scope = dict(
+        uid=identity.uid, company=body.companyId, branch=body.branchId, mode=body.mode
+    )
+    grant = entitlements.authorize(**scope)
+    entitlements.check_attempt(identity.uid, grant)
+    fingerprint = hashlib.sha256(
+        json.dumps(
+            dict(
+                mode=body.mode,
+                question=body.question,
+                conversation=[t.model_dump() for t in body.conversation],
+                force=body.forceRefresh,
+            ),
+            sort_keys=True,
+        ).encode()
+    ).hexdigest()
+    runtime = request.app.state.ai_runtime
+    key = (
+        identity.uid,
+        grant.company,
+        grant.branch,
+        grant.plan,
+        grant.period_start,
+        body.mode,
+    )
+    request_key = key + (body.requestId, fingerprint)
+    existing = (
+        entitlements.db.reference(
+            f"aiRequests/{grant.company}/{grant.branch}/{body.requestId}"
+        ).get()
+        or entitlements.db.reference(
+            f"aiUsage/{grant.company}/{grant.branch}/{grant.period_start}/requests/{body.requestId}"
+        ).get()
+    )
+    if existing:
+        if (
+            not isinstance(existing, dict)
+            or existing.get("uid") != identity.uid
+            or existing.get("fingerprint") != fingerprint
+        ):
+            raise HTTPException(409, "AI request identifier already used")
+        result = runtime.get(runtime.completed, request_key, 86400)
+        if result:
+            if entitlements.authorize(**scope) != grant:
+                raise HTTPException(403, "Subscription changed; reload the plan")
+            return {**result, "fromCache": True}
+        raise HTTPException(
+            409,
+            "This request was already submitted; check its result before starting a new request",
+        )
+    policy = POLICY.get(body.mode)
+    if policy:
+        # Daily handoff uses the branch's Philippine calendar date, rather than a browser clock.
+        day = (
+            datetime.now(__import__("zoneinfo").ZoneInfo("Asia/Manila"))
+            .date()
+            .isoformat()
+            if body.mode == "briefing"
+            else ""
+        )
+        key += (day,)
+        hit = runtime.get(
+            runtime.reports, key, policy[1] if body.forceRefresh else policy[0]
+        )
+        if hit:
+            entitlements.record_cached_request(
+                grant, identity.uid, body.requestId, fingerprint
+            )
+            if entitlements.authorize(**scope) != grant:
+                raise HTTPException(403, "Subscription changed; reload the plan")
+            result = {**hit, "requestId": body.requestId, "fromCache": True}
+            runtime.put(runtime.completed, request_key, result)
+            return result
+    grant = entitlements.reserve(
+        **scope, request_id=body.requestId, fingerprint=fingerprint, count_attempt=False
+    )
+    provider_started = False
+    try:
+        context = build_context(
+            entitlements.db,
+            grant,
+            body.mode,
+            now_ms=entitlements.clock(),
+            memory=entitlements.context(grant),
+        )
+        payload = json.dumps(
+            dict(context=context, question=question, conversation=turns),
+            ensure_ascii=False,
+        )
+        if len(payload) > 32000:
+            raise ValueError("context_size")
+        # Recheck immediately before provider transmission (context reads can take time).
+        if entitlements.authorize(**scope) != grant:
+            raise HTTPException(403, "Subscription changed; reload the plan")
+        provider_started = True
+        content, input_tokens, output_tokens = gateway.analysis_completion(
+            agent=AgentName.BUSINESS_ANALYST,
+            purpose="dashboard_analysis",
+            system_prompt=system_prompt(body.mode, grant.plan),
+            user_prompt=payload,
+            model="gpt-4o-mini",
+            max_output_tokens=TOKENS[body.mode],
+            temperature=0.35,
+        )
+        content = validate_analysis(body.mode, content)
+        entitlements.finish(grant, body.requestId, identity.uid)
+        runtime.observed("succeeded")
+        if entitlements.authorize(**scope) != grant:
+            raise HTTPException(403, "Subscription changed; reload the plan")
+        try:
+            entitlements.remember(
+                grant, mode=body.mode, content=content, request_id=body.requestId
+            )
+        except Exception:
+            logger.warning(
+                "ai_memory_write_failed", category="database", request_id=body.requestId
+            )
+        result = dict(
+            requestId=body.requestId,
+            mode=body.mode,
+            analysis=content,
+            generatedAt=datetime.now(timezone.utc).isoformat(),
+            fromCache=False,
+            contextTruncated=context["contextTruncated"],
+        )
+        if policy:
+            runtime.put(runtime.reports, key, result)
+        runtime.put(runtime.completed, request_key, result)
+        logger.info(
+            "ai_completed",
+            request_id=body.requestId,
+            mode=body.mode,
+            scope=hashlib.sha256(
+                f"{grant.company}/{grant.branch}".encode()
+            ).hexdigest()[:16],
+            duration_ms=round((time.monotonic() - started) * 1000),
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+        )
+        return result
+    except Exception as exc:
+        category = (
+            "budget"
+            if isinstance(exc, BudgetExceeded)
+            else (
+                "circuit"
+                if isinstance(exc, LLMUnavailable)
+                else (
+                    "validation"
+                    if isinstance(exc, ValueError)
+                    else describe_transport_failure(exc)
+                )
+            )
+        )
+        # Ambiguous network/timeouts may have consumed provider work; never retry/refund blindly.
+        uncertain = (
+            provider_started
+            and not failed_before_transmission(exc)
+            and (
+                category
+                in (
+                    "timeout",
+                    "unknown",
+                    "network_unreachable",
+                    "connection_refused",
+                    "dns",
+                    "tls",
+                )
+                or (
+                    type(exc).__name__ == "APIConnectionError"
+                    and category != "invalid_header"
+                )
+            )
+        )
+        try:
+            entitlements.finish(
+                grant,
+                body.requestId,
+                identity.uid,
+                state="uncertain" if uncertain else "failed",
+                refund=not uncertain,
+            )
+        except Exception:
+            logger.warning(
+                "ai_reservation_finalize_failed",
+                request_id=body.requestId,
+                category="database",
+            )
+        runtime.observed("failed", category)
+        logger.warning(
+            "ai_failed",
+            request_id=body.requestId,
+            mode=body.mode,
+            category=category,
+            duration_ms=round((time.monotonic() - started) * 1000),
+        )
+        if isinstance(exc, HTTPException):
+            raise
+        if isinstance(exc, BudgetExceeded):
+            raise HTTPException(
+                429, "AI daily budget reached; please try later"
+            ) from None
+        if isinstance(exc, LLMUnavailable):
+            raise HTTPException(503, "AI temporarily unavailable") from None
+        if category == "invalid_header":
+            raise HTTPException(
+                503, "AI configuration requires operator attention"
+            ) from None
+        raise HTTPException(
+            503,
+            "AI response unavailable. If submission status is uncertain, do not repeatedly retry.",
+        ) from None
+
+
+@router.post("/chat/completions", include_in_schema=False)
+def retired():
+    raise HTTPException(410, "This AI endpoint was retired. Reload the application.")

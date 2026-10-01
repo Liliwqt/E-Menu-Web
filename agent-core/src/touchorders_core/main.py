@@ -17,7 +17,7 @@ from touchorders_core.api.orders import FirebaseOrderService
 from touchorders_core.api.payments import FirebasePaymentService, PayMongoClient
 from touchorders_core.domain.enums import AgentName
 from touchorders_core.llm.budget import BudgetTracker, DailyBudget
-from touchorders_core.llm.gateway import LLMGateway, OpenAIClient
+from touchorders_core.llm.gateway import LLMGateway, OpenAIClient, describe_transport_failure
 from touchorders_core.observability.logging import configure_logging, get_logger
 from touchorders_core.settings import Settings, get_settings
 
@@ -47,12 +47,14 @@ def build_app(settings: Settings | None = None):
         if not settings.cors_allow_origins or settings.cors_allow_origins == "*":
             logger.warning("cors_origins_wildcard", detail="TOUCHORDERS_CORS_ORIGINS is '*'; restrict to exact origins in production")
 
+    if settings.environment in ("production", "staging") and settings.openai_base_url.strip().rstrip('/') != "https://api.openai.com/v1":
+        raise RuntimeError("Production AI must use the official HTTPS provider endpoint")
     gateway = None
     if openai_key:
         try:
             gateway = LLMGateway({}, OpenAIClient(api_key=openai_key, base_url=settings.openai_base_url), budget=BudgetTracker(RUNAWAY_FUSE))
         except Exception as exc:  # noqa: BLE001 - degrade to AI-disabled rather than crash boot
-            logger.warning("llm_gateway_unconfigured", error=str(exc))
+            logger.warning("llm_gateway_unconfigured", category=describe_transport_failure(exc))
     else:
         logger.warning("openai_api_key_absent", detail="AI routes disabled until OPENAI_API_KEY is set on Railway")
     verifier = None
@@ -62,7 +64,7 @@ def build_app(settings: Settings | None = None):
             credential = settings.firebase_credentials_path.read_text(encoding="utf-8")  # local dev only
         verifier = FirebaseIdentityVerifier(credential)
     except Exception as exc:  # noqa: BLE001 - firebase-admin/cred absent -> auth-gated routes 503
-        logger.warning("firebase_verifier_unconfigured", error=str(exc))
+        logger.warning("firebase_verifier_unconfigured", category=type(exc).__name__)
 
     entitlement_service = None
     order_service = None

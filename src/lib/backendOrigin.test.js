@@ -106,7 +106,7 @@ test('apiBase.js points at the live host', () => {
 test('every backend module imports the shared base', () => {
   // Guards the fix in pilotAiConfig.js specifically: it is the module that was
   // left behind, and nothing else would notice if it regressed to its own copy.
-  for (const name of ['pilotAiConfig.js', 'paymentApi.js', 'lifecycleApi.js']) {
+  for (const name of ['backendFetch.js', 'paymentApi.js', 'lifecycleApi.js']) {
     const source = fs.readFileSync(path.join(srcRoot, 'lib', name), 'utf8');
     assert.match(
       source,

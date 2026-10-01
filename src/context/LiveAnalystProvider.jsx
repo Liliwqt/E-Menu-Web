@@ -35,10 +35,9 @@ const INITIAL_ANALYSIS_DELAY_MS = 15 * 1000;           // 15s after handoff
 const NOTIFICATION_DISPLAY_MS = 15000;                 // 15s visible
 const PREPARING_MIN_DISPLAY_MS = 3000;                 // minimum preparing state
 
-// Session keys (shared with AuthContext which clears them on logout)
+// In-memory flags; the enclosing AI session resets on account, branch or access changes.
 const SK_HANDOFF_DONE = 'shiftHandoffCompleted';
 const SK_INITIAL_DONE = 'liveOpsInitialRunCompleted';
-const SK_FEED_ITEMS = 'aiFeedItems';
 
 const LiveAnalystContext = createContext(null);
 
@@ -53,20 +52,13 @@ const A = {
 };
 
 function createInitialState() {
-  // Restore persisted feed items from the current session
-  let feedItems = [];
-  try {
-    const saved = sessionStorage.getItem(SK_FEED_ITEMS);
-    if (saved) feedItems = JSON.parse(saved) || [];
-  } catch { /* ignore */ }
-
   return {
-    feedItems,
+    feedItems: [],
     scopeKey: null,
     preparingBriefing: null,
     generating: false,
     error: null,
-    handoffComplete: sessionStorage.getItem(SK_HANDOFF_DONE) === '1',
+    handoffComplete: false,
     notificationOpen: false,
   };
 }
@@ -81,8 +73,6 @@ function reducer(state, action) {
         (f) => f.mode !== 'briefing-preparing' && (f.mode || 'default') !== key
       );
       const next = [...filtered, item].slice(-12);
-      // Persist to sessionStorage
-      try { sessionStorage.setItem(SK_FEED_ITEMS, JSON.stringify(next)); } catch { /* */ }
       return { ...state, feedItems: next, scopeKey: action.scopeKey };
     }
     case A.SET_PREPARING:
@@ -96,9 +86,6 @@ function reducer(state, action) {
     case A.SET_NOTIFICATION_OPEN:
       return { ...state, notificationOpen: action.payload };
     case A.RESET: {
-      try {
-        sessionStorage.removeItem(SK_FEED_ITEMS);
-      } catch { /* */ }
       return { ...createInitialState(), feedItems: [], scopeKey: action.scopeKey || null, handoffComplete: false };
     }
     default:
@@ -154,6 +141,7 @@ export function LiveAnalystProvider({ children }) {
 
   const { branchId: activeBranch } = useSubscription();
   const feedScopeKey = `${user?.uid || ''}/${activeBranch || ''}`;
+  const flagsRef = useRef(new Map());
   const requestScope = useMemo(() => ({}), [user?.uid, activeBranch, aiEnabled]);
   const requestScopeRef = useRef(requestScope);
   requestScopeRef.current = requestScope;
@@ -189,6 +177,7 @@ export function LiveAnalystProvider({ children }) {
   }, [isAuthenticated]);
 
   useEffect(() => {
+    flagsRef.current.clear();
     dispatch({ type: A.RESET, scopeKey: feedScopeKey });
     clearTimeout(notificationTimerRef.current);
     clearTimeout(randomTimerRef.current);
@@ -257,7 +246,7 @@ export function LiveAnalystProvider({ children }) {
         return result;
       } catch (err) {
         if (requestScopeRef.current !== requestScope || !mountedRef.current) return null;
-        console.error('[LiveAnalyst] Generation failed:', err);
+        console.error('[LiveAnalyst] Generation failed', { category: 'request' });
         if (mode === 'briefing') {
           const remaining = preparingVisibleUntilRef.current - Date.now();
           if (remaining > 0) await new Promise((r) => setTimeout(r, remaining));
@@ -285,7 +274,7 @@ export function LiveAnalystProvider({ children }) {
     if (!bd?.hasOrders) return;
 
     // Already done this session?
-    if (sessionStorage.getItem(SK_HANDOFF_DONE) === '1') {
+    if (flagsRef.current.get(SK_HANDOFF_DONE) === '1') {
       dispatch({ type: A.SET_HANDOFF_COMPLETE, payload: true });
       return;
     }
@@ -302,7 +291,7 @@ export function LiveAnalystProvider({ children }) {
         generatedFor: new Date().toISOString(),
       });
       if (result) {
-        sessionStorage.setItem(SK_HANDOFF_DONE, '1');
+        flagsRef.current.set(SK_HANDOFF_DONE, '1');
       }
     } finally {
       handoffInFlightRef.current = false;
@@ -347,7 +336,7 @@ export function LiveAnalystProvider({ children }) {
     const bd = branchDataRef.current;
     if (!bd?.hasOrders) return;
     if (handoffStartedRef.current) return;
-    if (sessionStorage.getItem(SK_HANDOFF_DONE) === '1') {
+    if (flagsRef.current.get(SK_HANDOFF_DONE) === '1') {
       dispatch({ type: A.SET_HANDOFF_COMPLETE, payload: true });
       return;
     }
@@ -375,13 +364,13 @@ export function LiveAnalystProvider({ children }) {
   // First live analysis runs 15s after the handoff completes.
   useEffect(() => {
     if (!aiEnabled || !state.handoffComplete || !activeBranch) return;
-    if (sessionStorage.getItem(SK_INITIAL_DONE) === '1') return;
+    if (flagsRef.current.get(SK_INITIAL_DONE) === '1') return;
     const bd = branchDataRef.current;
     if (!bd?.hasOrders) return;
 
     const timer = setTimeout(async () => {
       if (!mountedRef.current) return;
-      sessionStorage.setItem(SK_INITIAL_DONE, '1');
+      flagsRef.current.set(SK_INITIAL_DONE, '1');
       await generateLiveReport();
     }, INITIAL_ANALYSIS_DELAY_MS);
 
@@ -407,7 +396,7 @@ export function LiveAnalystProvider({ children }) {
     }
 
     // Start the random cycle after handoff is complete + initial analysis delay
-    const startDelay = sessionStorage.getItem(SK_INITIAL_DONE) === '1'
+    const startDelay = flagsRef.current.get(SK_INITIAL_DONE) === '1'
       ? getRandomInterval()
       : INITIAL_ANALYSIS_DELAY_MS + 5000; // Wait for initial to finish first
 

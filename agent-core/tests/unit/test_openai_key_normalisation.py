@@ -42,7 +42,7 @@ _CLEAN = "sk-live-abc"
 
 
 def _sent_key(env_value: str | None) -> str:
-    client = OpenAIClient(api_key=env_value or _CLEAN)
+    client = OpenAIClient(api_key=env_value)
     return client._client.api_key
 
 

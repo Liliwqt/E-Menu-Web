@@ -14,6 +14,7 @@ import {
 } from 'firebase/auth';
 import { ref, update, serverTimestamp } from 'firebase/database';
 import { auth, database } from '../lib/firebase';
+import { aiSession, clearLegacyAiStorage } from '../lib/aiSession.js';
 import { loadUserNickname, saveUserNickname } from '../lib/menuApi';
 import {
   createWorkspace,
@@ -153,6 +154,8 @@ export function AuthProvider({ children }) {
         setWorkspaceStatus(ACCESS_STATUS.NONE);
         setRole(null);
         localStorage.removeItem(AUTH_KEY);
+        aiSession.reset();
+        clearLegacyAiStorage(localStorage, sessionStorage);
         sessionStorage.removeItem(AI_SHIFT_HANDOFF_COMPLETED);
         sessionStorage.removeItem(AI_LIVEOPS_INITIAL_COMPLETED);
         sessionStorage.removeItem(AI_LIVEOPS_NEXT_RUNTIME);
@@ -169,6 +172,8 @@ export function AuthProvider({ children }) {
     setLoading(true);
     setError(null);
     try {
+      aiSession.reset();
+      clearLegacyAiStorage(localStorage, sessionStorage);
       sessionStorage.removeItem(AI_SHIFT_HANDOFF_COMPLETED);
       sessionStorage.removeItem(AI_LIVEOPS_INITIAL_COMPLETED);
       sessionStorage.removeItem(AI_LIVEOPS_NEXT_RUNTIME);
@@ -204,6 +209,8 @@ export function AuthProvider({ children }) {
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
       await signInWithPopup(auth, provider);
+      aiSession.reset();
+      clearLegacyAiStorage(localStorage, sessionStorage);
       sessionStorage.removeItem(AI_SHIFT_HANDOFF_COMPLETED);
       sessionStorage.removeItem(AI_LIVEOPS_INITIAL_COMPLETED);
       sessionStorage.removeItem(AI_LIVEOPS_NEXT_RUNTIME);
@@ -291,6 +298,8 @@ export function AuthProvider({ children }) {
   const logout = useCallback(async () => {
     setLoading(true);
     try {
+      aiSession.reset();
+      clearLegacyAiStorage(localStorage, sessionStorage);
       sessionStorage.removeItem(AI_SHIFT_HANDOFF_COMPLETED);
       sessionStorage.removeItem(AI_LIVEOPS_INITIAL_COMPLETED);
       sessionStorage.removeItem(AI_LIVEOPS_NEXT_RUNTIME);

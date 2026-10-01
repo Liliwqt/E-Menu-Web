@@ -1,189 +1,163 @@
-"""A 503 from the AI route must say which fault it was, in the logs.
+"""Failures retain actionable categories, never provider text, tokens or customer data."""
 
-Four unrelated faults all surface as the same 503: an unreadable insights read, an
-open circuit breaker, a rejected OpenAI key, and an exhausted balance. OpenAI
-raises a distinct exception type for each (`AuthenticationError`, `RateLimitError`,
-`APIConnectionError`), so the type is the only thing separating them — and it was
-being discarded. `raise HTTPException(...) from exc` keeps the cause inside the
-process and nowhere else, so an operator reading the service logs saw five hundred
-"AI generation failed" lines with no way to tell a revoked key from a bad model name.
-
-These assert the cause reaches the log, which is what makes the error actionable.
-"""
-
-from __future__ import annotations
-
-import json
-import logging
-
+import json, socket
+import httpx
+import pytest
 from fastapi.testclient import TestClient
+from touchorders_core.api.routes import ai
+from touchorders_core.llm.budget import BudgetExceeded
+from test_ai_endpoint import setup, send, body, Gateway
 
-from touchorders_core.api.app import create_app
-from touchorders_core.api.auth import FakeIdentityVerifier
-from touchorders_core.api.routes import ai as ai_route
-from touchorders_core.settings import Settings
-
-
-def _body() -> dict:
-    return {
-        "companyId": "company-test",
-        "branchId": "branch-test",
-        "mode": "realtime",
-        "requestId": "00000000-0000-4000-8000-000000000001",
-        "model": "gpt-4o-mini",
-        "messages": [
-            {"role": "system", "content": "You are the TouchOrders analyst. Return JSON."},
-            {"role": "user", "content": '{"summary": {"revenue": 1234}}'},
-        ],
-        "response_format": {"type": "json_object"},
-        "max_tokens": 350,
-        "temperature": 0.35,
-    }
+CANARY = "sk-proj-DO_NOT_PUBLISH_CANARY customer@example.com +639171234567 Bearer private-token"
 
 
-class FakeEntitlementService:
-    def __init__(self):
-        self.requests = []
-        self.refunds = []
-
-    def reserve(self, **kwargs):
-        self.requests.append(kwargs)
-        from touchorders_core.api.entitlements import AiGrant
-        return AiGrant(kwargs["company"], kwargs["branch"], "starter", 100)
-
-    def refund(self, grant, request_id):
-        self.refunds.append(request_id)
-
-    def context(self, grant):
-        return []
-
-    def remember(self, grant, **kwargs):
-        pass
-
-
-def _settings() -> Settings:
-    return Settings(environment="test", log_json=False)
-
-
-def test_generation_failure_logs_the_openai_error_type() -> None:
-    """The regression: every 503 was anonymous in the logs."""
-
-    class RateLimitedGateway:
-        def analysis_completion(self, **kwargs):
-            raise RuntimeError("simulated upstream outage")
-
-    captured: list[dict] = []
-    original_error = ai_route.logger.error
-
-    def capture(event, **kwargs):
-        captured.append({"event": event, **kwargs})
-
-    ai_route.logger.error = capture
-    try:
-        app = create_app(
-            _settings(),
-            gateway=RateLimitedGateway(),
-            identity_verifier=FakeIdentityVerifier(),
-            entitlement_service=FakeEntitlementService(),
-        )
-        with TestClient(app) as client:
-            response = client.post("/api/ai/chat/completions?auth=test-id-token", json=_body())
-    finally:
-        ai_route.logger.error = original_error
-
-    assert response.status_code == 503
-    assert captured, "a failed generation must be logged, not silently turned into a 503"
-    entry = captured[0]
-    assert entry["event"] == "ai_generation_failed"
-    # The type is the whole point: it is what separates a revoked key from a bad model.
-    assert entry["error_type"] == "RuntimeError"
-    assert "simulated upstream outage" in entry["error"]
-    # Enough context to find the request again, and no customer payload.
-    assert entry["branch"] == "branch-test"
-    assert entry["mode"] == "realtime"
-    assert entry["model"] == "gpt-4o-mini"
-
-
-def test_context_failure_is_logged_too() -> None:
-    """The other anonymous 503: an unreadable insights read."""
-
-    class BrokenContext(FakeEntitlementService):
-        def context(self, grant):
-            raise OSError("premiumInsights unreadable")
-
-    captured: list[dict] = []
-    original_error = ai_route.logger.error
-    ai_route.logger.error = lambda event, **kwargs: captured.append({"event": event, **kwargs})
-
-    class WorkingGateway:
-        def analysis_completion(self, **kwargs):
-            raise AssertionError("must not reach the model when context fails")
-
-    try:
-        app = create_app(
-            _settings(),
-            gateway=WorkingGateway(),
-            identity_verifier=FakeIdentityVerifier(),
-            entitlement_service=BrokenContext(),
-        )
-        with TestClient(app) as client:
-            response = client.post("/api/ai/chat/completions?auth=test-id-token", json=_body())
-    finally:
-        ai_route.logger.error = original_error
-
-    assert response.status_code == 503
-    assert any(entry["event"] == "ai_context_unavailable" for entry in captured), captured
-
-
-def test_budget_exhaustion_is_logged_as_a_warning() -> None:
-    """429 is a different class of problem (the operator's spend), so it is distinct."""
-
-    class ExhaustedGateway:
-        def analysis_completion(self, **kwargs):
-            from touchorders_core.llm.budget import BudgetExceeded
-            raise BudgetExceeded("daily cap reached")
-
-    captured: list[dict] = []
-    original_warning = ai_route.logger.warning
-    ai_route.logger.warning = lambda event, **kwargs: captured.append({"event": event, **kwargs})
-
-    try:
-        app = create_app(
-            _settings(),
-            gateway=ExhaustedGateway(),
-            identity_verifier=FakeIdentityVerifier(),
-            entitlement_service=FakeEntitlementService(),
-        )
-        with TestClient(app) as client:
-            response = client.post("/api/ai/chat/completions?auth=test-id-token", json=_body())
-    finally:
-        ai_route.logger.warning = original_warning
-
-    assert response.status_code == 429
-    assert any(entry["event"] == "ai_budget_exhausted" for entry in captured), captured
-
-
-def test_the_response_body_still_hides_internals() -> None:
-    """Logging the cause must not leak it to the browser.
-
-    The operator needs the exception type in the logs; the reader needs a sentence
-    they can act on. The detail stays a fixed, generic string.
-    """
-
-    class BrokenGateway:
-        def analysis_completion(self, **kwargs):
-            raise RuntimeError("sk-proj-SECRETVALUE rejected")
-
-    app = create_app(
-        _settings(),
-        gateway=BrokenGateway(),
-        identity_verifier=FakeIdentityVerifier(),
-        entitlement_service=FakeEntitlementService(),
+def test_failure_logs_and_body_hide_provider_content(monkeypatch):
+    gateway = Gateway()
+    gateway.error = RuntimeError(CANARY)
+    app, service, _ = setup(gateway=gateway)
+    events = []
+    monkeypatch.setattr(
+        ai.logger,
+        "warning",
+        lambda event, **fields: events.append(dict(event=event, **fields)),
     )
     with TestClient(app) as client:
-        response = client.post("/api/ai/chat/completions?auth=test-id-token", json=_body())
-
+        response = send(client)
     assert response.status_code == 503
-    body = response.json()
-    assert "SECRETVALUE" not in json.dumps(body)
-    assert body["detail"] == "AI generation failed; please try again"
+    assert events[0]["category"] == "unknown"
+    assert events[0]["request_id"] and events[0]["mode"] == "realtime"
+    for content in (json.dumps(events), response.text):
+        for secret in (
+            "DO_NOT_PUBLISH",
+            "customer@example",
+            "639171234567",
+            "private-token",
+        ):
+            assert secret not in content
+    usage = service.db.reference("aiUsage/company-test/branch-test").get()
+    assert (
+        next(iter(next(iter(usage.values()))["requests"].values()))["state"]
+        == "uncertain"
+    )
+
+
+def test_context_failure_refunds_only_its_own_claim(monkeypatch):
+    app, service, gateway = setup()
+    monkeypatch.setattr(
+        service, "context", lambda grant: (_ for _ in ()).throw(RuntimeError(CANARY))
+    )
+    with TestClient(app) as client:
+        data = body()
+        response = send(client, data)
+        assert response.status_code == 503 and not gateway.calls
+        assert send(client, data).status_code == 409
+    usage = next(
+        iter(service.db.reference("aiUsage/company-test/branch-test").get().values())
+    )
+    assert (
+        usage["count"] == 0
+        and usage["requests"][data["requestId"]]["state"] == "failed"
+    )
+
+
+def test_budget_exhaustion_is_safe_and_refunds(monkeypatch):
+    gateway = Gateway()
+    gateway.error = BudgetExceeded(CANARY)
+    app, service, _ = setup(gateway=gateway)
+    events = []
+    monkeypatch.setattr(
+        ai.logger,
+        "warning",
+        lambda event, **fields: events.append(dict(event=event, **fields)),
+    )
+
+    with TestClient(app) as client:
+        response = send(client)
+    assert response.status_code == 429 and events[0]["category"] == "budget"
+    assert (
+        next(
+            iter(
+                service.db.reference("aiUsage/company-test/branch-test").get().values()
+            )
+        )["count"]
+        == 0
+    )
+
+
+@pytest.mark.parametrize(
+    "kind,refunded",
+    [(httpx.ConnectError, True), (httpx.ReadError, False), (httpx.ReadTimeout, False)],
+)
+def test_only_confirmed_pretransmission_failure_refunds(kind, refunded):
+    gateway = Gateway()
+    gateway.error = RuntimeError("Provider transport failed")
+    gateway.error.__cause__ = kind("Transport failed")
+    app, service, _ = setup(gateway=gateway)
+    with TestClient(app) as client:
+        assert send(client).status_code == 503
+    usage = next(
+        iter(service.db.reference("aiUsage/company-test/branch-test").get().values())
+    )
+    assert usage["count"] == (0 if refunded else 1)
+    assert next(iter(usage["requests"].values()))["state"] == (
+        "failed" if refunded else "uncertain"
+    )
+
+
+def test_standard_access_and_exception_logs_are_scrubbed(capsys):
+    import logging
+    from touchorders_core.observability.logging import configure_logging
+
+    configure_logging(level="INFO", json_output=True)
+    logging.getLogger("uvicorn.access").warning(
+        "POST /api/ai/analysis?auth=%s Bearer %s", "TOKEN_CANARY", "TOKEN_CANARY"
+    )
+    try:
+        raise RuntimeError(CANARY)
+    except RuntimeError:
+        logging.getLogger("openai").exception("Provider failed")
+    content = capsys.readouterr().err
+    assert "TOKEN_CANARY" not in content and "DO_NOT_PUBLISH" not in content
+    assert "[REDACTED]" in content
+
+
+def test_uvicorn_access_formatter_keeps_its_structured_arguments():
+    import logging
+    from uvicorn.logging import AccessFormatter
+    from touchorders_core.observability.logging import configure_logging
+
+    logger = logging.getLogger("uvicorn.access")
+    handler = logging.StreamHandler()
+    handler.setFormatter(
+        AccessFormatter(
+            "%(client_addr)s - %(request_line)s %(status_code)s", use_colors=False
+        )
+    )
+    logger.addHandler(handler)
+    try:
+        configure_logging(level="INFO", json_output=True)
+        record = logging.LogRecord(
+            "uvicorn.access",
+            logging.INFO,
+            __file__,
+            1,
+            '%s - "%s %s HTTP/%s" %d',
+            (
+                "127.0.0.1:4321",
+                "POST",
+                "/api/ai/analysis?auth=TOKEN_CANARY",
+                "1.1",
+                400,
+            ),
+            None,
+        )
+        for filter in handler.filters:
+            filter.filter(record)
+        rendered = handler.format(record)
+        assert (
+            "TOKEN_CANARY" not in rendered
+            and "[REDACTED]" in rendered
+            and "400" in rendered
+        )
+    finally:
+        logger.removeHandler(handler)

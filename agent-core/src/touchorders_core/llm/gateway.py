@@ -42,37 +42,52 @@ class OutputRejected(RuntimeError):
 
 
 def describe_transport_failure(exc: BaseException, *, max_depth: int = 6) -> str:
-    """Name the reason a connection actually failed, not just that it did.
-
-    ``openai.APIConnectionError`` carries the string ``"Connection error."`` in
-    ``str(exc)`` for *every* underlying fault, because the SDK collapses them. The
-    real reason lives in the chained cause — an ``httpx.ConnectError`` wrapping an
-    ``OSError`` — and it is the difference between "network is unreachable"
-    (no egress at all), "name resolution failed" (DNS), and "connection refused"
-    (something is listening and saying no). Those need different fixes, and a log
-    reading only ``str(exc)`` reports the same line for all three.
-
-    Walks ``__cause__``/``__context__`` and returns the deepest meaningful message,
-    prefixed with the exception types so the chain is readable.
-    """
-    parts: list[str] = []
-    seen: set[int] = set()
-    current: BaseException | None = exc
-    depth = 0
-    while current is not None and depth < max_depth and id(current) not in seen:
+    """Classify a bounded, cycle-safe cause chain without exposing its values."""
+    import ssl
+    import socket
+    chain = []
+    seen = set()
+    current = exc
+    while current is not None and len(chain) < max_depth and id(current) not in seen:
         seen.add(id(current))
-        message = str(current).strip()
-        # "Connection error." on its own says nothing, so keep the type for context
-        # but do not let it be the reason.
-        parts.append(f"{type(current).__name__}: {message}" if message else type(current).__name__)
-        nxt = current.__cause__ or current.__context__
-        # Only follow an explicit cause chain; implicit context can be unrelated.
-        if current.__cause__ is None and current.__context__ is not None:
-            current = current.__context__ if depth == 0 else None
-        else:
-            current = nxt
-        depth += 1
-    return " <- ".join(parts)
+        chain.append(current)
+        current = current.__cause__ or (current.__context__ if len(chain) == 1 else None)
+    for item in reversed(chain):
+        name = type(item).__name__
+        if name == 'LocalProtocolError':
+            return 'invalid_header'
+        if isinstance(item, (ssl.SSLError, ssl.CertificateError)):
+            return 'tls'
+        if isinstance(item, socket.gaierror) or getattr(item, 'errno', None) == -2:
+            return 'dns'
+        if isinstance(item, OSError):
+            if item.errno == 101:
+                return 'network_unreachable'
+            if item.errno == 111:
+                return 'connection_refused'
+        if isinstance(item, TimeoutError) or 'Timeout' in name:
+            return 'timeout'
+        if name == 'AuthenticationError':
+            return 'authentication'
+        if name == 'RateLimitError':
+            return 'quota'
+    if any(type(item).__name__ in {'APIStatusError', 'InternalServerError', 'BadRequestError'} for item in chain):
+        return 'provider_error'
+    return 'unknown'
+
+
+def failed_before_transmission(exc: BaseException) -> bool:
+    """Only connection-establishment failures prove no request was transmitted."""
+    seen = set()
+    current = exc
+    for _ in range(6):
+        if current is None or id(current) in seen:
+            break
+        seen.add(id(current))
+        if type(current).__name__ == 'ConnectError':
+            return True
+        current = current.__cause__
+    return False
 
 
 @dataclass
@@ -160,7 +175,7 @@ class OpenAIClient:
     the composition root's ``.strip()`` only helps if the cleaned value is the one passed on."""
 
     def __init__(self, *, api_key: str | None = None, base_url: str | None = None,
-                 timeout: float = 30.0, max_retries: int = 3) -> None:
+                 timeout: float = 30.0, max_retries: int = 0) -> None:
         import os
 
         try:
@@ -170,7 +185,7 @@ class OpenAIClient:
         # Strip surrounding whitespace from either source. A key with a trailing newline or
         # space produces "Illegal header value" and fails as an unopenable connection.
         key = (api_key or os.environ.get("OPENAI_API_KEY") or "").strip()
-        if not key:
+        if not key or any(ord(c) < 32 or ord(c) == 127 for c in key):
             raise RuntimeError("OPENAI_API_KEY is not set; the gateway cannot reach the model.")
         # Whitespace first, then the trailing slash: rstrip("/") alone leaves a pasted
         # newline in place and httpx rejects the URL outright (InvalidURL).
@@ -179,10 +194,15 @@ class OpenAIClient:
 
     def complete(self, *, model, messages, response_format, read_tool_specs, max_output_tokens, temperature) -> RawResponse:  # noqa: ANN001  # pragma: no cover - network path
         wire_messages = [{k: v for k, v in m.items() if k != "purpose"} for m in messages]
-        kwargs: dict[str, Any] = {"model": model, "messages": wire_messages, "response_format": response_format, "max_completion_tokens": max_output_tokens, "temperature": temperature}
+        kwargs: dict[str, Any] = {"model": model, "messages": wire_messages, "response_format": response_format, "max_completion_tokens": max_output_tokens, "temperature": temperature, "store": False}
         if read_tool_specs:
             kwargs["tools"] = read_tool_specs
-        completion = self._client.chat.completions.create(**kwargs)
+        try:
+            completion = self._client.chat.completions.create(**kwargs)
+        except Exception as exc:
+            if not failed_before_transmission(exc):
+                raise
+            completion = self._client.chat.completions.create(**kwargs)
         choice = completion.choices[0]
         usage = completion.usage
         cached = getattr(getattr(usage, "prompt_tokens_details", None), "cached_tokens", 0) or 0
@@ -402,4 +422,3 @@ def _echo_violations(obj: Any, allowed: set[float], echo_keys: frozenset[str], k
         for item in obj:
             violations.extend(_echo_violations(item, allowed, echo_keys, key))
     return violations
-

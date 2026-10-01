@@ -66,7 +66,8 @@ const server = await createServer({
       if (id.endsWith('/src/lib/firebase.js')) return code
         .replace("import { getDatabase }", "import { getDatabase, connectDatabaseEmulator }")
         .replace('export const database = getDatabase(firebaseApp);', `export const database = getDatabase(firebaseApp); connectDatabaseEmulator(database, '127.0.0.1', 9000, { mockUserToken: {sub:window.__uxRole || 'staff', user_id:window.__uxRole || 'staff'} });`)
-        .replace('let authToken = null;', 'let authToken = window.__uxToken;')
+        .replace('auth.currentUser?.getIdToken()', 'Promise.resolve(window.__uxToken)')
+        .replace('const rtdb = databaseURL ? new URL(databaseURL) : null;', 'const rtdb = new URL("http://127.0.0.1:9000/");')
         .replace('url.startsWith(databaseURL)', 'url.startsWith("http://127.0.0.1:9000/")')
         .replace('`${databaseURL}/${encoded}.json`', '`http://127.0.0.1:9000/${encoded}.json?ns=demo-menu-kiosk`');
     } },

@@ -106,7 +106,10 @@ def test_starter_modes_and_branch_wide_quota(monkeypatch):
         service.reserve(**req(uid="manager", request_id="00000000-0000-4000-8000-000000000002"))
     assert limit.value.status_code == 429
     service.refund(grant, req()["request_id"])
-    assert service.reserve(**req(uid="manager", request_id="00000000-0000-4000-8000-000000000002")).plan == "starter"
+    with pytest.raises(HTTPException) as reused_failure:
+        service.reserve(**req(uid="manager", request_id="00000000-0000-4000-8000-000000000002"))
+    assert reused_failure.value.status_code == 409
+    assert service.reserve(**req(uid="manager", request_id="00000000-0000-4000-8000-000000000003")).plan == "starter"
 
 
 def test_role_tier_and_expiry_are_checked_before_ai_use():

@@ -40,6 +40,8 @@ function isTransportFailure(error) {
  */
 export function describeAiFailure({ status = null, error = null, detail = '' } = {}) {
   if (status) {
+    if (status === 410) return 'This AI connection was updated. Reload the application.';
+    if (status === 409) return 'This request was already submitted. Check its result before starting another request.';
     if (status === 404) {
       return 'The AI assistant is not available on this deployment yet. Everything else here keeps working.';
     }
@@ -53,14 +55,12 @@ export function describeAiFailure({ status = null, error = null, detail = '' } =
       return 'The AI assistant is busy or out of quota. Try again in a little while.';
     }
     if (status >= 500) {
-      return 'The AI assistant is having trouble on its side. Try again shortly.';
+      return 'The AI assistant is having trouble on its side. A response may still be processing; avoid repeated submissions.';
     }
     if (status >= 400) {
       // Nothing more specific is known about this one, so the backend's own words
       // are the most useful thing available.
-      return detail
-        ? `The AI assistant could not answer that request: ${detail}`
-        : 'The AI assistant could not answer that request.';
+      return 'The AI assistant could not answer that request. Check the question length and remove credentials or private contact information.';
     }
   }
 
@@ -70,6 +70,6 @@ export function describeAiFailure({ status = null, error = null, detail = '' } =
 
   // Something came back that the app cannot interpret. Prefer the backend's own
   // words when there are any, since they are more specific than anything here.
-  if (detail) return `The AI assistant could not complete that: ${detail}`;
+  // Details may contain upstream payloads; never echo arbitrary text.
   return 'The AI assistant could not complete that request.';
 }

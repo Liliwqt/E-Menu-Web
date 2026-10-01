@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App';
+import { AiSessionBoundary } from './context/AiSessionBoundary';
 import { SubscriptionProvider } from './context/SubscriptionContext';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
@@ -26,9 +27,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <ThemeProvider>
           <AuthProvider>
             <SubscriptionProvider>
-              <LiveAnalystProvider>
+              <AiSessionBoundary><LiveAnalystProvider>
                 <App />
-              </LiveAnalystProvider>
+              </LiveAnalystProvider></AiSessionBoundary>
             </SubscriptionProvider>
           </AuthProvider>
         </ThemeProvider>

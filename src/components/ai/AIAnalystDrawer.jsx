@@ -1,3 +1,4 @@
+import { aiSession } from '../../lib/aiSession.js';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Sparkles, SendHorizonal, X, Sunrise, SearchCheck, FlaskConical, Radio } from 'lucide-react';
@@ -97,29 +98,19 @@ function AiMessage({ msg }) {
   );
 }
 
-// Conversational memory: chat survives closing/reopening the drawer within the session, so the
-// analyst keeps context. sessionStorage only — no backend, cleared on logout with the other keys.
-const CHAT_KEY = (branchId) => `emp_ai_chat_${branchId}`;
-const MAX_STORED_TURNS = 12;   // persisted
-const MAX_CONTEXT_TURNS = 10;  // sent to the AI
-
-function loadChat(branchId) {
-  try {
-    const saved = JSON.parse(sessionStorage.getItem(CHAT_KEY(branchId)));
-    return Array.isArray(saved) ? saved : [];
-  } catch {
-    return [];
-  }
-}
+const MAX_CONTEXT_TURNS = 10;
 
 export default function AIAnalystDrawer({ open, onClose, initialAction = null }) {
   const { nickname, user, workspace } = useAuth();
   const { branchId, aiAnalyticsData, hasOrders } = useBranchData();
   const { billing } = useSubscription();
   const [inputMode, setInputMode] = useState('opschat');
-  const [messages, setMessages] = useState(() => loadChat(branchId));
+  const chatScope = { uid: user?.uid, companyId: workspace?.companyId, branchId, plan: billing?.plan, periodStartAt: billing?.periodStartAt };
+  const [messages, setMessages] = useState(() => aiSession.getChat(chatScope));
+  useEffect(() => { aiSession.setChat(chatScope, messages); }, [messages]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
+  const pendingRef = useRef(false);
   const bodyRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -130,6 +121,7 @@ export default function AIAnalystDrawer({ open, onClose, initialAction = null })
       setMessages((prev) => prev.length > 0 ? prev : [{
         id: nextId(),
         role: 'ai',
+        localOnly: true,
         text: `${timeOfDayLabel()}, ${managerNickname}. I'm your business analyst for ${branchLabel}. Ask me anything about sales, inventory, staffing or menu performance — or run one of the tools below.`,
       }]);
       setTimeout(() => inputRef.current?.focus(), 250);
@@ -150,15 +142,6 @@ export default function AIAnalystDrawer({ open, onClose, initialAction = null })
     bodyRef.current?.scrollTo({ top: bodyRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, busy]);
 
-  // Persist the conversation (last N turns) for this session so reopening continues it.
-  useEffect(() => {
-    if (!branchId) return;
-    try {
-      const keep = messages.filter((m) => m.role === 'user' || m.role === 'ai').slice(-MAX_STORED_TURNS);
-      sessionStorage.setItem(CHAT_KEY(branchId), JSON.stringify(keep));
-    } catch { /* storage full or unavailable — memory silently degrades to this session view */ }
-  }, [messages, branchId]);
-
   useEffect(() => {
     if (!open) return undefined;
     const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
@@ -177,7 +160,8 @@ export default function AIAnalystDrawer({ open, onClose, initialAction = null })
   }
 
   async function runMode(mode, { userText, scenario } = {}) {
-    if (busy || !canUseAiMode(billing, mode)) return;
+    if (pendingRef.current || busy || !canUseAiMode(billing, mode)) return;
+    pendingRef.current = true;
 
     if (userText) {
       setMessages((prev) => [...prev, { id: nextId(), role: 'user', text: userText }]);
@@ -188,7 +172,7 @@ export default function AIAnalystDrawer({ open, onClose, initialAction = null })
       const isChat = mode === 'opschat' || mode === 'simulation';
       const conversation = isChat
         ? messages
-          .filter((m) => (m.role === 'user' || m.role === 'ai') && m.text)
+          .filter((m) => (m.role === 'user' || m.role === 'ai') && m.text && !m.localOnly)
           .slice(-MAX_CONTEXT_TURNS)
           .map((m) => ({ role: m.role === 'user' ? 'user' : 'assistant', text: m.text }))
         : undefined;
@@ -202,14 +186,15 @@ export default function AIAnalystDrawer({ open, onClose, initialAction = null })
         || result.greeting
         || (result.insight?.message)
         || '';
-      setMessages((prev) => [...prev, { id: nextId(), role: 'ai', text, data: result }]);
+      setMessages((prev) => [...prev, { id: nextId(), role: 'ai', text, data: result }].slice(-12));
     } catch (err) {
       // The service already worked out what went wrong — aiFailure.js maps a transport
       // error, a 402, a 429 and a 5xx to distinct, accurate sentences. Swallowing that
       // and printing one generic line here is what made a fixed host still *look* broken:
       // every 401, 429, 503 and 404 read identically as "I hit a problem reaching the AI
       // service", so there was no way to tell a bad host from a spent budget.
-      console.error('[AI Analyst] request failed:', err);
+      if (err?.name === 'AbortError') return;
+      console.error('[AI Analyst] request failed', { category: 'request' });
       const message = typeof err?.message === 'string' ? err.message.trim() : '';
       setMessages((prev) => [...prev, {
         id: nextId(),
@@ -221,6 +206,7 @@ export default function AIAnalystDrawer({ open, onClose, initialAction = null })
           : message || 'I hit a problem reaching the AI service. Try again in a moment.',
       }]);
     } finally {
+      pendingRef.current = false;
       setBusy(false);
     }
   }
@@ -304,6 +290,7 @@ export default function AIAnalystDrawer({ open, onClose, initialAction = null })
           <input
             ref={inputRef}
             className="input"
+            maxLength={2000}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}

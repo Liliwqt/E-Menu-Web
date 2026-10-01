@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from touchorders_core.api.routes.ai import AnalysisRuntime
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -36,6 +40,7 @@ class ReadinessResponse(BaseModel):
     status: str
     firebase: str
     openai: str
+    lastAiRequest: dict | None = None
 
 
 def create_app(
@@ -43,10 +48,10 @@ def create_app(
     *,
     gateway: LLMGateway | None = None,
     identity_verifier: IdentityVerifier | None = None,
-    entitlement_service = None,
-    order_service = None,
-    payment_service = None,
-    lifecycle_service = None,
+    entitlement_service=None,
+    order_service=None,
+    payment_service=None,
+    lifecycle_service=None,
 ) -> FastAPI:
     """Create the BFF application.
 
@@ -56,25 +61,49 @@ def create_app(
     """
 
     runtime_settings = settings or get_settings()
-    configure_logging(level=runtime_settings.log_level, json_output=runtime_settings.log_json)
+    configure_logging(
+        level=runtime_settings.log_level, json_output=runtime_settings.log_json
+    )
     logger = get_logger(__name__)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         if payment_service is not None:
+
             async def sweep() -> None:
                 while True:
                     try:
                         await run_in_threadpool(payment_service.sweep_expired)
                     except Exception as exc:
-                        logger.warning("payment_reservation_sweep_failed", error=str(exc))
+                        logger.warning(
+                            "payment_reservation_sweep_failed", error=str(exc)
+                        )
                     await asyncio.sleep(30)
+
             app.state.payment_sweeper_task = asyncio.create_task(sweep())
+        if entitlement_service is not None:
+
+            async def retention_sweep():
+                while True:
+                    try:
+                        result = await run_in_threadpool(
+                            entitlement_service.purge_insights
+                        )
+                        logger.info("ai_insight_retention_checked", **result)
+                    except Exception:
+                        logger.warning(
+                            "ai_insight_retention_failed", category="database"
+                        )
+                    await asyncio.sleep(86400)
+
+            app.state.insight_sweeper_task = asyncio.create_task(retention_sweep())
         try:
             yield
         finally:
-            task = app.state.payment_sweeper_task
-            if task is not None:
+            tasks = [app.state.payment_sweeper_task, app.state.insight_sweeper_task]
+            for task in tasks:
+                if task is None:
+                    continue
                 task.cancel()
                 try:
                     await task
@@ -101,6 +130,41 @@ def create_app(
     app.state.lifecycle_service = lifecycle_service
     app.state.payment_service = payment_service
     app.state.payment_sweeper_task = None
+    app.state.insight_sweeper_task = None
+    app.state.ai_runtime = AnalysisRuntime()
+
+    @app.middleware("http")
+    async def bounded_ai_body(request: Request, call_next):
+        if request.url.path.startswith("/api/ai/"):
+            # Bound streaming/chunked bodies too, not only Content-Length.
+            chunks = []
+            size = 0
+            async for chunk in request.stream():
+                size += len(chunk)
+                if size > 65536:
+                    return JSONResponse(
+                        status_code=413,
+                        content={"detail": "AI request exceeds 64 KiB"},
+                        headers={"Cache-Control": "no-store"},
+                    )
+                chunks.append(chunk)
+            request._body = b"".join(chunks)
+        response = await call_next(request)
+        if request.url.path.startswith("/api/ai/"):
+            response.headers["Cache-Control"] = "no-store"
+        return response
+
+    @app.exception_handler(RequestValidationError)
+    async def safe_validation(request: Request, error: RequestValidationError):
+        if request.url.path.startswith("/api/ai/"):
+            return JSONResponse(
+                status_code=422,
+                content={"detail": "Invalid AI request fields"},
+                headers={"Cache-Control": "no-store"},
+            )
+        from fastapi.exception_handlers import request_validation_exception_handler
+
+        return await request_validation_exception_handler(request, error)
 
     app.include_router(ai_router)
     app.include_router(orders_router)
@@ -126,12 +190,18 @@ def create_app(
         checked separately at /health/orders."""
 
         firebase = "ok" if identity_verifier is not None else "unconfigured"
-        openai_status = "ok" if gateway is not None else "unconfigured"
-        healthy = firebase == "ok" and openai_status == "ok"
+        openai_status = "configured" if gateway is not None else "unconfigured"
+        healthy = (
+            firebase == "ok"
+            and app.state.ai_runtime.status["state"] == "succeeded"
+            and (app.state.ai_runtime.status["at"] or 0)
+            > int(time.time() * 1000) - 900000
+        )
         return ReadinessResponse(
             status="healthy" if healthy else "degraded",
             firebase=firebase,
             openai=openai_status,
+            lastAiRequest=app.state.ai_runtime.status if gateway is not None else None,
         )
 
     @app.get("/health/orders", tags=["health"])

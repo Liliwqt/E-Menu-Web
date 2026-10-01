@@ -20,7 +20,7 @@ def test_ready_reports_degraded_when_nothing_is_wired() -> None:
     app = create_app(_settings())
     with TestClient(app) as client:
         body = client.get("/health/ready").json()
-    assert body == {"status": "degraded", "firebase": "unconfigured", "openai": "unconfigured"}
+    assert body == {"status": "degraded", "firebase": "unconfigured", "openai": "unconfigured", "lastAiRequest": None}
 
 
 def test_ready_reports_healthy_when_all_dependencies_are_wired() -> None:
@@ -28,4 +28,4 @@ def test_ready_reports_healthy_when_all_dependencies_are_wired() -> None:
     app = create_app(_settings(), gateway=gateway, identity_verifier=FakeIdentityVerifier())
     with TestClient(app) as client:
         body = client.get("/health/ready").json()
-    assert body == {"status": "healthy", "firebase": "ok", "openai": "ok"}
+    assert body == {"status": "degraded", "firebase": "ok", "openai": "configured", "lastAiRequest": {"state": "configured", "at": None, "category": None}}

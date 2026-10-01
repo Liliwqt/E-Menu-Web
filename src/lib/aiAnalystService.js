@@ -1,287 +1,49 @@
-import { pilotAiConfig } from './pilotAiConfig';
-import { fetchWithAppCheck, branchDataPath } from './firebase';
-import { buildSystemPrompt, buildDataPrompt, parseModelJson } from './aiPrompts';
+import { backendFetch } from './backendFetch';
+import { aiSession } from './aiSession.js';
 import { describeAiFailure } from './aiFailure';
 import { readAiErrorDetail } from './aiErrorDetail';
-
-const CACHE_KEY_PREFIX = 'ai_analyst_cache_v2_';
-
-/**
- * Per-mode cache policy (all times ms).
- * - ttl: how long a cached response satisfies a normal (non-forced) load.
- * - cooldown: minimum cache age before even a FORCED refresh regenerates. This turns
- *   refresh-button spam into cache hits — restaurant data barely moves in a few minutes.
- * - daily: the cache key embeds the local date → generated once per day, every later
- *   login that day loads the cached brief (Daily Business Brief requirement).
- * - noCache: question-specific modes are never cached (each request is unique).
- */
-const MODE_CACHE_POLICY = {
-  realtime: { ttl: 30 * 60 * 1000, cooldown: 3 * 60 * 1000 },
-  live: { ttl: 55 * 60 * 1000, cooldown: 5 * 60 * 1000 },
-  deep: { ttl: 60 * 60 * 1000, cooldown: 10 * 60 * 1000 },
-  executive: { ttl: 60 * 60 * 1000, cooldown: 15 * 60 * 1000 },
-  briefing: { ttl: 24 * 60 * 60 * 1000, cooldown: 24 * 60 * 60 * 1000, daily: true },
-  leak: { ttl: 30 * 60 * 1000, cooldown: 10 * 60 * 1000 },
-  opschat: { noCache: true },
-  simulation: { noCache: true },
-};
-
-// Output-token caps per mode; long-form reports get room, quick insights stay tight.
-const MODE_MAX_TOKENS = {
-  deep: 2600,
-  executive: 2400,
-  briefing: 1000,
-  leak: 1200,
-  simulation: 900,
-  opschat: 1000,
-};
-
-function policyFor(mode) {
-  return MODE_CACHE_POLICY[mode] || MODE_CACHE_POLICY.realtime;
-}
-
-function localDateKey() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function getCacheKey(branchId, mode) {
-  const daySuffix = policyFor(mode).daily ? `_${localDateKey()}` : '';
-  return `${CACHE_KEY_PREFIX}${branchId}_${mode}${daySuffix}`;
-}
-
-function normalizeAnalysisMode(mode) {
-  if (mode === 'deep') return 'deep';
-  if (mode === 'executive') return 'executive';
-  if (mode === 'live') return 'live';
-  if (mode === 'briefing') return 'briefing';
-  if (mode === 'leak') return 'leak';
-  if (mode === 'simulation') return 'simulation';
-  if (mode === 'opschat') return 'opschat';
-  return 'realtime';
-}
-
-async function requestAnalysis(analyticsData, mode, branchId) {
-  const { model, endpoint } = pilotAiConfig;
-
-  const systemPrompt = buildSystemPrompt(mode);
-  const dataPrompt = buildDataPrompt(analyticsData, mode);
-
-  // fetchWithAppCheck attaches the signed-in user's Firebase ID token, which FastAPI verifies
-  // before it forwards to OpenAI with the server-held key.
-  let response;
-  try {
-    response = await fetchWithAppCheck(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        companyId: branchDataPath(branchId).split('/')[0],
-        branchId,
-        mode,
-        requestId: crypto.randomUUID(),
-        model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: dataPrompt },
-        ],
-        response_format: { type: 'json_object' },
-        max_tokens: MODE_MAX_TOKENS[mode] || 350,
-        temperature: MODE_MAX_TOKENS[mode] ? 0.45 : 0.35,
-      }),
-    });
-  } catch (err) {
-    // The service did not answer. The browser's own wording for this is
-    // "Failed to fetch", which says nothing useful, so the console keeps the
-    // technical version and the caller gets something the reader can act on.
-    console.error('[AI Analysis] request did not complete:', err);
-    throw new Error(describeAiFailure({ error: err }));
-  }
-
-  if (!response.ok) {
-    // FastAPI reports every error as {"detail": "..."} — the only field it sets.
-    // This used to read .error.message then .message (the OpenAI shape this client
-    // originally spoke) and fall back to stringifying the whole body, so the useful
-    // reason was always dropped and the drawer showed one generic line. readAiErrorDetail
-    // knows the backend's actual shapes, and returns '' when there is nothing usable so
-    // the status can be named instead of printing a blob.
-    let body = null;
-    try {
-      body = await response.json();
-    } catch {
-      body = null;
-    }
-    const errorDetail = readAiErrorDetail(body) || `HTTP ${response.status}`;
-    console.error('[AI Analysis] backend refused the request:', response.status, errorDetail);
-    throw new Error(describeAiFailure({ status: response.status, detail: errorDetail }));
-  }
-
-  const data = await response.json();
-  const rawContent = data.choices?.[0]?.message?.content;
-
-  if (!rawContent) {
-    throw new Error('AI returned an empty response.');
-  }
-
-  return parseModelJson(rawContent);
-}
-
-function readCache(branchId, mode) {
-  try {
-    const cached = localStorage.getItem(getCacheKey(branchId, mode));
-    if (!cached) return null;
-    const parsed = JSON.parse(cached);
-    return { analysis: parsed.analysis, age: Date.now() - (parsed.timestamp || 0) };
-  } catch {
-    return null;
-  }
-}
-
-function cacheAnalysis(branchId, mode, analysis) {
-  const policy = policyFor(mode);
-  if (policy.noCache) return;
-  try {
-    localStorage.setItem(getCacheKey(branchId, mode), JSON.stringify({
-      timestamp: Date.now(),
-      analysis,
-    }));
-    if (policy.daily) {
-      // Purge previous days' date-keyed entries for this branch+mode.
-      const todayKey = getCacheKey(branchId, mode);
-      Object.keys(localStorage)
-        .filter((k) => k.startsWith(`${CACHE_KEY_PREFIX}${branchId}_${mode}_`) && k !== todayKey)
-        .forEach((k) => localStorage.removeItem(k));
-    }
-  } catch {
-  }
-}
-
-function normalizeName(value) {
-  return String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[_-]+/g, ' ')
-    .replace(/\s+/g, ' ');
-}
-
-function buildActiveProductIndex(inventory = {}) {
-  const ids = new Set();
-  const names = new Set();
-
-  Object.entries(inventory || {}).forEach(([id, item]) => {
-    ids.add(String(id));
-    names.add(normalizeName(id));
-    names.add(normalizeName(item?.productName || item?.name || item?.title));
-  });
-
-  names.delete('');
-
-  return { ids, names };
-}
-
-function isActiveProduct(productId, product, activeIndex) {
-  return activeIndex.ids.has(String(productId)) ||
-    activeIndex.names.has(normalizeName(productId)) ||
-    activeIndex.names.has(normalizeName(product?.name || product?.productName || product?.title));
-}
-
-function sanitizeAnalyticsForAI(analyticsData = {}) {
-  const inventory = analyticsData.inventory || {};
-  const activeIndex = buildActiveProductIndex(inventory);
-
-  if (activeIndex.ids.size === 0 && activeIndex.names.size === 0) {
-    return analyticsData;
-  }
-
-  const products = Object.fromEntries(
-    Object.entries(analyticsData.products || {})
-      .filter(([productId, product]) => isActiveProduct(productId, product, activeIndex))
-  );
-
-  const productEntries = Object.entries(products);
-  const summary = { ...(analyticsData.summary || {}) };
-
-  if (!isActiveProduct(summary.bestSellingItem, { name: summary.bestSellingItem }, activeIndex)) {
-    const bestActive = productEntries
-      .sort(([, a], [, b]) => Number(b.quantitySold || 0) - Number(a.quantitySold || 0))[0];
-    summary.bestSellingItem = bestActive?.[1]?.name || bestActive?.[0] || '';
-  }
-
-  if (!isActiveProduct(summary.leastSellingItem, { name: summary.leastSellingItem }, activeIndex)) {
-    const leastActive = productEntries
-      .sort(([, a], [, b]) => Number(a.quantitySold || 0) - Number(b.quantitySold || 0))[0];
-    summary.leastSellingItem = leastActive?.[1]?.name || leastActive?.[0] || '';
-  }
-
-  return {
-    ...analyticsData,
-    summary,
-    products,
-  };
-}
+import { canUseAiMode } from './planFeatures';
 
 export async function generateAIAnalysis(analyticsData, branchId, forceRefresh = false, mode = 'realtime') {
-  const analysisMode = normalizeAnalysisMode(mode);
-  const safeAnalyticsData = sanitizeAnalyticsForAI(analyticsData);
-
-  // Cache gate: normal loads honor the TTL; FORCED refreshes still honor the cooldown,
-  // so rapid re-clicks and re-opens are served from cache instead of re-billing OpenAI.
-  const policy = policyFor(analysisMode);
-  if (branchId && !policy.noCache) {
-    const hit = readCache(branchId, analysisMode);
-    if (hit) {
-      const maxAge = forceRefresh ? (policy.cooldown ?? 0) : (policy.ttl ?? 0);
-      if (hit.age < maxAge) {
-        return { ...hit.analysis, fromCache: true };
-      }
+  const scope = aiSession.getScope();
+  if (!scope || scope.branchId !== branchId || !canUseAiMode(scope.billing, mode)) throw new DOMException('AI session changed', 'AbortError');
+  const chat = mode === 'opschat' || mode === 'simulation';
+  const context = analyticsData?.reportContext || {};
+  const question = chat ? String(context.scenario || '').slice(0, 2000) : '';
+  const conversation = chat && Array.isArray(context.conversation)
+    ? context.conversation.filter(turn => !turn.localOnly).slice(-10).map(turn => ({ role: turn.role === 'user' ? 'user' : 'assistant', text: String(turn.text || '').slice(0, 400) })) : [];
+  const key = JSON.stringify([mode, question, conversation, Boolean(forceRefresh)]);
+  return aiSession.run(key, async ({ scope: active, requestId, signal }) => {
+    let response;
+    try {
+      response = await backendFetch('/api/ai/analysis', {
+        method: 'POST', signal, headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companyId: active.companyId, branchId, mode, requestId, question, conversation, forceRefresh: Boolean(forceRefresh) }),
+      });
+    } catch (error) {
+      if (signal.aborted) throw new DOMException('AI session changed', 'AbortError');
+      console.error('[AI Analysis] request failed', { category: 'transport', requestId, mode });
+      throw new Error(describeAiFailure({ error }));
     }
-  }
-
-  const analysis = await requestAnalysis(safeAnalyticsData, analysisMode, branchId);
-
-  const defaultAnalysis = {
-    mode: analysisMode,
-    insight: null,
-    greeting: '',
-    overallHealth: '',
-    topPerformers: '',
-    concerns: '',
-    shiftHandoff: null,
-    quickWins: [],
-    priorityActions: { urgent: [], recommended: [], longTerm: [] },
-    closingNote: '',
-    generatedAt: new Date().toISOString(),
-    fromCache: false,
-  };
-
-  const result = { ...defaultAnalysis, ...analysis, generatedAt: new Date().toISOString(), fromCache: false };
-  result.mode = normalizeAnalysisMode(result.mode || analysisMode);
-
-  if (!result.priorityActions || typeof result.priorityActions !== 'object') {
-    result.priorityActions = { urgent: [], recommended: [], longTerm: [] };
-  }
-  result.priorityActions.urgent = result.priorityActions.urgent || [];
-  result.priorityActions.recommended = result.priorityActions.recommended || [];
-  result.priorityActions.longTerm = result.priorityActions.longTerm || [];
-
-  if (branchId) {
-    cacheAnalysis(branchId, analysisMode, result);
-  }
-
-  return result;
+    if (!response.ok) {
+      // Never log or display arbitrary provider/backend bodies. The helper is bounded to known safe messages.
+      const detail = readAiErrorDetail(await response.json().catch(() => null));
+      console.error('[AI Analysis] request refused', { status: response.status, requestId, mode });
+      const error = new Error(describeAiFailure({ status: response.status, detail }));
+      error.retryWithNewId = [400, 401, 403, 422, 429].includes(response.status);
+      throw error;
+    }
+    const data = await response.json();
+    if (data.mode !== mode || !data.analysis || typeof data.analysis !== 'object') throw new Error('The AI response could not be read.');
+    const result = { ...data.analysis, mode, generatedAt: data.generatedAt, fromCache: data.fromCache, contextTruncated: data.contextTruncated };
+    // Names are personalized locally and never transmitted to the provider.
+    if (mode === 'briefing') {
+      result.greeting = `${context.timeOfDayLabel || 'Hello'}, ${context.managerNickname || 'Manager'}.`;
+      result.branchWelcome = `Welcome to ${context.branchLabel || 'your branch'}.`;
+    }
+    return result;
+  });
 }
 
-export function clearAnalysisCache(branchId, mode = null) {
-  try {
-    if (mode) {
-      localStorage.removeItem(getCacheKey(branchId, mode));
-      return;
-    }
-
-    Object.keys(localStorage)
-      .filter((key) => key.startsWith(`${CACHE_KEY_PREFIX}${branchId}_`))
-      .forEach((key) => localStorage.removeItem(key));
-  } catch {
-  }
-}
+// Report caching now belongs to the authorized backend; refresh remains subject to its cooldown.
+export function clearAnalysisCache() {}
