@@ -74,14 +74,14 @@ function StockModal({ item, allSizes = [], branchId, onClose, canSave }) {
     setError('');
     try {
       if (delta !== 0) {
-        await adjustStock(branchId, item.id, delta, previous, value, user?.email || 'manager', note.trim());
+        await adjustStock(branchId, item.id, delta, previous, value, user.uid, note.trim());
       }
       // Persist any edited sibling sizes through the same V1 adjust path.
       for (const s of siblings) {
         const prev = Number(s.stock ?? 0);
         const next = Number(siblingStocks[s.id] ?? prev);
         if (next !== prev) {
-          await adjustStock(branchId, s.id, next - prev, prev, next, user?.email || 'manager', note.trim());
+          await adjustStock(branchId, s.id, next - prev, prev, next, user.uid, note.trim());
         }
       }
       const thresholdChanged = warnLevel !== Number(item.warningLevel ?? 10)

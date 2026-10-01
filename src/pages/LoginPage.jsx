@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, X, Chrome } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { getUserBranch } from '../config/authConfig';
@@ -13,14 +13,6 @@ const FOOTER_CONTENT = {
       { heading: 'Contact', body: 'For access or account support, contact your restaurant administrator or system support team. Include your branch name, registered email, and a short description of the issue.' },
       { heading: 'Basic Troubleshooting', body: 'Check your internet connection, confirm that your email address is entered correctly, and refresh the page if the login form does not respond.' },
       { heading: 'Login Assistance', body: 'Use Forgot Password to request a reset link. For branch access changes, ask the administrator to verify that your email is assigned to the correct branch.' },
-    ],
-  },
-  privacy: {
-    title: 'Privacy Policy',
-    sections: [
-      { heading: 'User Data', body: 'The portal uses account information such as email addresses and display names to authenticate users and route them to authorized branch tools.' },
-      { heading: 'Restaurant Data', body: 'Menu items, order logs, inventory records, analytics, and branch settings are stored for operational reporting and restaurant management.' },
-      { heading: 'Analytics and Storage', body: 'Analytics are calculated from real order activity. Firebase services store authentication, database, and configuration data needed to operate the platform.' },
     ],
   },
   cookies: {
@@ -294,8 +286,13 @@ export default function LoginPage() {
         )}
 
         <div className="lg__footer">
+          <Link className="lg__footerLink" to="/about">About</Link>
+          <Link className="lg__footerLink" to="/pricing">Pricing</Link>
+          <Link className="lg__footerLink" to="/contact">Contact</Link>
+          <Link className="lg__footerLink" to="/terms">Terms</Link>
+          <Link className="lg__footerLink" to="/privacy">Privacy</Link>
+          <Link className="lg__footerLink" to="/refund-policy">Refunds</Link>
           <button type="button" className="lg__footerLink" onClick={() => setActiveFooterContent('help')}>Need Help</button>
-          <button type="button" className="lg__footerLink" onClick={() => setActiveFooterContent('privacy')}>Privacy Policy</button>
           <button type="button" className="lg__footerLink" onClick={() => setActiveFooterContent('cookies')}>Cookie Notice</button>
           <button type="button" className="lg__footerLink" onClick={() => setActiveFooterContent('acceptableUse')}>Acceptable Use Policy</button>
         </div>

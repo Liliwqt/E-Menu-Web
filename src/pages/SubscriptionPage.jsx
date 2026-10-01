@@ -9,6 +9,7 @@ import {
   isSubscriptionActive, isTrialEndingSoon, trialDaysRemaining,
 } from '../lib/planFeatures';
 import { CAP } from '../lib/permissions';
+import { PUBLICATION, subscriptionCancellationEmail } from '../lib/publicSiteContent';
 import '../styles/subscription.css';
 
 const PLANS = [
@@ -82,6 +83,12 @@ export default function SubscriptionPage() {
           : 'Ask the business owner to arrange a plan change or renewal.'}
       </div>
       <p className="sub__subtitle">Order payment statuses mean customer-reported QR payment or pay-at-counter. They do not confirm that money was received.</p>
+      {owner && <section className="sub__cancellation" aria-labelledby="cancellation-title">
+        <h2 id="cancellation-title">Request cancellation</h2>
+        <p>Opens your email app. Send the request to support; your subscription stays unchanged until the operator processes and confirms cancellation.</p>
+        <a className="sub__btn sub__btn--ghost" href={subscriptionCancellationEmail(workspace.companyId, branchId)}>Email cancellation request</a>
+        <p>If your email app does not open, email <a href={`mailto:${PUBLICATION.supportEmail}`}>{PUBLICATION.supportEmail}</a> with your company and branch IDs. Support hours: {PUBLICATION.supportHours}. Processing time is not yet defined.</p>
+      </section>}
     </div>
   );
 }

@@ -47,7 +47,7 @@ const authSource = `import React, { createContext, useContext, useState } from '
 import { can as allowed } from '../lib/permissions';
 const Context = createContext(null);
 export function AuthProvider({children}) {
- const [role, setRole] = useState(window.__uxRole || 'staff');
+ const [role, setRole] = useState(window.__uxRole === undefined ? 'staff' : window.__uxRole);
  window.__uxSetRole = setRole;
  const workspace = {companyId:'${company}',companyName:'UX Cafe',branchId:'${branch}',branchName:'Main',onboardingComplete:true,branches:{'${branch}':{branchId:'${branch}',name:'Main'},'${second}':{branchId:'${second}',name:'Second'}}};
  return <Context.Provider value={{user:role ? {uid:role,email:role+'@example.test'} : null,workspace,workspaceLoaded:true,workspaceStatus:'ready',initialLoading:false,isAuthenticated:!!role,role,can:(cap)=>allowed(role,cap),nickname:role,isOwner:role==='owner',isManager:role==='manager',isStaff:role==='staff',setWorkspaceFromProps:()=>{},logout:()=>setRole(null)}}>{children}</Context.Provider>;
@@ -78,6 +78,30 @@ let browser;
 const pageErrors = [];
 try {
   browser = await chromium.launch({ executablePath: process.env.BROWSER_PATH || '/snap/brave/current/opt/brave.com/brave/brave', headless: true, args: ['--no-sandbox', '--disable-features=LocalNetworkAccessChecks,LocalNetworkAccessChecksWebSockets,LocalNetworkAccessChecksWebTransport'] });
+  const publicContext = await browser.newContext();
+  await publicContext.addInitScript(() => { window.__uxRole = null; });
+  await publicContext.route('**/*', route => ['127.0.0.1', 'localhost'].includes(new URL(route.request().url()).hostname) ? route.continue() : route.abort());
+  const publicPage = await publicContext.newPage();
+  publicPage.on('pageerror', error => pageErrors.push(`public: ${error.message}`));
+  for (const path of ['about', 'pricing', 'contact', 'terms', 'privacy', 'refund-policy']) {
+    await publicPage.goto(`http://127.0.0.1:5188/${path}`);
+    await publicPage.getByRole('heading', { level: 1 }).waitFor();
+    await publicPage.getByRole('status').filter({ hasText: 'Draft for review' }).waitFor();
+    if (path === 'contact') {
+      await publicPage.getByText('Monday–Friday, 8:00 AM–9:00 PM Philippine time (Asia/Manila)', { exact: true }).waitFor();
+      assert.equal(await publicPage.getByRole('link', { name: 'touch.support1@gmail.com' }).getAttribute('href'), 'mailto:touch.support1@gmail.com');
+    }
+    for (const width of [390, 768, 1280]) {
+      await publicPage.setViewportSize({ width, height: 900 });
+      for (const theme of ['light', 'dark']) {
+        await publicPage.evaluate(value => document.documentElement.setAttribute('data-theme', value), theme);
+        assert.ok(await publicPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${path} overflow ${width}/${theme}`);
+        await publicPage.screenshot({ path: `${out}/public-${path}-${width}-${theme}.png`, fullPage: true });
+      }
+    }
+  }
+  await publicContext.close();
+  console.log('PASS public: anonymous draft pages, contact/hours, responsive light/dark themes');
   for (const role of roles) {
     const context = await browser.newContext({ reducedMotion: 'reduce', viewport: { width: 1280, height: 900 } });
     const payload = { iss: 'https://securetoken.google.com/demo-menu-kiosk', aud: 'demo-menu-kiosk', iat: 0, exp: 4102444800, auth_time: 0, sub: role, user_id: role, firebase: { sign_in_provider: 'custom', identities: {} } };
@@ -92,6 +116,27 @@ try {
     page.setDefaultTimeout(15000);
     page.on('console', msg => { if (msg.type() === 'error') console.log('BROWSER',msg.text()); });
     page.on('pageerror', e => (console.log('PAGE ERROR', e.message),pageErrors.push(`${role}: ${e.message}`)));
+    await page.goto('http://127.0.0.1:5188/subscription/main');
+    await page.getByRole('heading', { name: 'Subscription', exact: true }).waitFor();
+    await page.getByText('Basic plan active', { exact: true }).waitFor();
+    const cancellation = page.getByRole('link', { name: 'Email cancellation request', exact: true });
+    assert.equal(await cancellation.count(), role === 'owner' ? 1 : 0);
+    if (role === 'owner') {
+      const before = await api(`billingEntitlements/${company}`);
+      const email = new URL(await cancellation.getAttribute('href'));
+      assert.equal(email.pathname, 'touch.support1@gmail.com');
+      assert.ok(email.searchParams.get('body').includes(`Branch ID: ${branch}`));
+      // Observe a real click without opening an external email app or sending mail.
+      await cancellation.evaluate(el => el.addEventListener('click', event => { event.preventDefault(); window.__cancellationClicked = true; }));
+      await cancellation.click();
+      assert.equal(await page.evaluate(() => window.__cancellationClicked), true);
+      await page.reload();
+      await page.getByText('Basic plan active', { exact: true }).waitFor();
+      assert.deepEqual(await api(`billingEntitlements/${company}`), before);
+      await page.goto('http://127.0.0.1:5188/subscription/second');
+      await page.getByText('Basic plan active', { exact: true }).waitFor();
+      assert.ok(new URL(await cancellation.getAttribute('href')).searchParams.get('body').includes(`Branch ID: ${second}`));
+    }
     await page.goto('http://127.0.0.1:5188/menu/main');
     await page.getByRole('button',{name:'Mark Coffee sold out',exact:true}).waitFor();
     assert.equal(await page.getByRole('button',{name:'Edit Coffee',exact:true}).count(), role === 'staff' ? 0 : 1);
@@ -157,6 +202,7 @@ try {
     await page.getByRole('button',{name:'Save changes',exact:true}).click();
     await dialog.waitFor({state:'hidden'});
     assert.equal((await api(`${company}/branches/${branch}/inventory/Drinks/coffee/sizes/Medium`)).stock,20);
+    assert.equal((await api(`${company}/branches/${branch}/inventory/Drinks/coffee/sizes/Medium`)).lastModifiedBy, role);
     await stockButton.click();
     await page.keyboard.press('Shift+Tab');
     assert.ok(await dialog.evaluate(el=>el.contains(document.activeElement)));
@@ -251,5 +297,5 @@ try {
   }
   console.log('Inventory rows with no matching menu item: (none)');
   assert.deepEqual(pageErrors,[]);
-  console.log(`PASS: ledger, membership, Free plan and stock preserved; screenshots ${out}`);
+  console.log(`PASS: ledger, membership, Basic plan and stock preserved; screenshots ${out}`);
 } finally { await browser?.close(); await server.close(); }

@@ -16,6 +16,11 @@
 
 .sub__title { font-size: 28px; font-weight: 700; margin: 8px 0 4px; }
 .sub__subtitle { margin: 0; color: var(--text-muted, #6b7280); max-width: 720px; }
+.sub__cancellation { margin-top: 24px; padding: 20px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); overflow-wrap: anywhere; }
+.sub__cancellation h2 { margin: 0 0 12px; font-size: 18px; }
+.sub__cancellation p { line-height: 1.6; }
+.sub__cancellation .sub__btn { min-height: 44px; text-decoration: none; }
+.sub__cancellation a:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
 
 .sub__trial {
   display: flex; gap: 12px; align-items: flex-start;

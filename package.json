@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test"
+    "test": "node --test",
+    "check:public-release": "node scripts/check-public-release.mjs"
   },
   "dependencies": {
     "firebase": "^10.7.1",

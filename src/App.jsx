@@ -8,6 +8,7 @@ import { CHUNK_FAILURE_ACTION, buildRecoveryUrl, chunkFailureAction } from './li
 import { branchRefFor, resolveBranchRef, withBranchRef } from './lib/branchRef';
 import { BranchDataProvider, useBranchData } from './context/BranchDataContext';
 import LoginPage from './pages/LoginPage';
+import PublicPage from './pages/PublicPage';
 import WorkspaceSetupPage from './pages/WorkspaceSetupPage';
 import AccessErrorScreen from './components/ui/AccessErrorScreen';
 import AppShell from './components/layout/AppShell';
@@ -218,6 +219,12 @@ export default function App() {
   return (
     <Routes>
         <Route path="/" element={<LoginPage />} />
+        <Route path="/about" element={<PublicPage />} />
+        <Route path="/pricing" element={<PublicPage />} />
+        <Route path="/contact" element={<PublicPage />} />
+        <Route path="/terms" element={<PublicPage />} />
+        <Route path="/privacy" element={<PublicPage />} />
+        <Route path="/refund-policy" element={<PublicPage />} />
         <Route path="/setup" element={<SetupRoute />} />
         <Route path="/home/:branchId" element={shellRoute(DashboardPage)} />
         <Route path="/analytics/:branchId" element={shellRoute(AnalyticsPage, CAP.VIEW_ANALYTICS)} />
