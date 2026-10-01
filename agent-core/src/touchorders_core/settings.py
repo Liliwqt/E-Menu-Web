@@ -147,6 +147,16 @@ class Settings(BaseSettings):
         default=False,
         validation_alias=AliasChoices("PAYMONGO_LINKED_ACCOUNTS_ENABLED", "TOUCHORDERS_PAYMONGO_LINKED_ACCOUNTS_ENABLED"),
     )
+    openai_base_url: str = Field(
+        default="https://api.openai.com/v1",
+        validation_alias=AliasChoices("OPENAI_BASE_URL", "TOUCHORDERS_OPENAI_BASE_URL"),
+        description=(
+            "OpenAI API root. Unset in normal operation. Override only to route the model "
+            "call through a proxy or an OpenAI-compatible endpoint — needed when the "
+            "hosting provider cannot reach api.openai.com, which surfaces as "
+            "APIConnectionError and a 503 from /api/ai/chat/completions."
+        ),
+    )
     cors_allow_origins: str = Field(
         default="*",
         validation_alias=AliasChoices("TOUCHORDERS_CORS_ORIGINS", "CORS_ORIGINS"),

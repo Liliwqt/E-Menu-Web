@@ -46,7 +46,7 @@ def build_app(settings: Settings | None = None):
     gateway = None
     if openai_key:
         try:
-            gateway = LLMGateway({}, OpenAIClient(), budget=BudgetTracker(RUNAWAY_FUSE))
+            gateway = LLMGateway({}, OpenAIClient(base_url=settings.openai_base_url), budget=BudgetTracker(RUNAWAY_FUSE))
         except Exception as exc:  # noqa: BLE001 - degrade to AI-disabled rather than crash boot
             logger.warning("llm_gateway_unconfigured", error=str(exc))
     else:

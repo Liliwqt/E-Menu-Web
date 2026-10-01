@@ -133,7 +133,8 @@ async def chat_completions(
         # session, a spent account and a wrong key indistinguishable from the browser.
         logger.error("ai_generation_failed", error_type=type(exc).__name__, error=str(exc),
                      model=model, uid=identity.uid, company=body.companyId,
-                     branch=body.branchId, mode=body.mode)
+                     branch=body.branchId, mode=body.mode,
+                     api_base_url=getattr(gateway, "openai_base_url", None))
         raise HTTPException(status_code=503, detail="AI generation failed; please try again") from exc
     try:
         entitlements.remember(grant, mode=body.mode, content=content, request_id=body.requestId)

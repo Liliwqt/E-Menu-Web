@@ -108,9 +108,17 @@ class FakeLLMClient:
 class OpenAIClient:
     """Live :class:`LLMClient`. The OpenAI SDK is imported lazily so importing this module — and
     the whole ``llm`` package — never requires the SDK or an API key; only constructing the client
-    (at the composition root when live LLM is enabled) touches it. Sole reader of OPENAI_API_KEY."""
+    (at the composition root when live LLM mode is enabled) touches it. Sole reader of OPENAI_API_KEY.
 
-    def __init__(self, *, api_key: str | None = None, timeout: float = 30.0, max_retries: int = 3) -> None:
+    ``base_url`` defaults to the real OpenAI endpoint. It is a parameter rather than a hardcoded
+    constant because the host cannot always reach api.openai.com: when the provider's egress to
+    OpenAI is blocked, every call fails with ``APIConnectionError`` — reported as a 503 by
+    /api/ai/chat/completions — and the only remedy is to point at a proxy or an
+    OpenAI-compatible endpoint. Without this parameter that remedy does not exist short of a
+    rebuild."""
+
+    def __init__(self, *, api_key: str | None = None, base_url: str | None = None,
+                 timeout: float = 30.0, max_retries: int = 3) -> None:
         import os
 
         try:
@@ -120,7 +128,8 @@ class OpenAIClient:
         key = api_key or os.environ.get("OPENAI_API_KEY")
         if not key:
             raise RuntimeError("OPENAI_API_KEY is not set; the gateway cannot reach the model.")
-        self._client = OpenAI(api_key=key, timeout=timeout, max_retries=max_retries)
+        root = (base_url or os.environ.get("OPENAI_BASE_URL") or "https://api.openai.com/v1").rstrip("/")
+        self._client = OpenAI(api_key=key, base_url=root, timeout=timeout, max_retries=max_retries)
 
     def complete(self, *, model, messages, response_format, read_tool_specs, max_output_tokens, temperature) -> RawResponse:  # noqa: ANN001  # pragma: no cover - network path
         wire_messages = [{k: v for k, v in m.items() if k != "purpose"} for m in messages]
@@ -153,6 +162,19 @@ class LLMGateway:
         self._cache = cache if cache is not None else ResponseCache()
         self._budget = budget if budget is not None else BudgetTracker({})
         self._metrics = metrics or get_metrics()
+
+    @property
+    def openai_base_url(self) -> str | None:
+        """The endpoint the live client will actually call, for failure logs.
+
+        Surfaced so a connection error names the host it could not reach. An
+        OpenAIConnectionError is otherwise identical whether the default endpoint
+        is blocked or an override is wrong, and those need different fixes.
+        Returns None for a fake client, which never opens a socket.
+        """
+        client = self._client
+        base_url = getattr(getattr(client, "_client", None), "base_url", None)
+        return str(base_url) if base_url else None
 
     def budget_status(self, agent: AgentName) -> BudgetStatus:
         return self._budget.status(agent)
