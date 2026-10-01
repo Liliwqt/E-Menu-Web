@@ -149,7 +149,15 @@ class OpenAIClient:
     OpenAI is blocked, every call fails with ``APIConnectionError`` — reported as a 503 by
     /api/ai/chat/completions — and the only remedy is to point at a proxy or an
     OpenAI-compatible endpoint. Without this parameter that remedy does not exist short of a
-    rebuild."""
+    rebuild.
+
+    The key is stripped here, not only at the composition root. A variable pasted into a
+    hosting dashboard routinely arrives with a trailing newline or space, and ``httpx``
+    refuses to send it: the request never leaves the container and
+    ``APIConnectionError: Connection error.`` is raised from a
+    ``LocalProtocolError: Illegal header value b'Bearer ...\\n'``. That reads exactly like a
+    network fault, so it is worth defending against here where the value is actually used —
+    the composition root's ``.strip()`` only helps if the cleaned value is the one passed on."""
 
     def __init__(self, *, api_key: str | None = None, base_url: str | None = None,
                  timeout: float = 30.0, max_retries: int = 3) -> None:
@@ -159,10 +167,14 @@ class OpenAIClient:
             from openai import OpenAI  # lazy: not needed for FakeLLM / tests
         except ModuleNotFoundError as exc:  # pragma: no cover - only when live LLM is enabled
             raise RuntimeError("The 'openai' package is required for live LLM mode; install it or use FakeLLMClient.") from exc
-        key = api_key or os.environ.get("OPENAI_API_KEY")
+        # Strip surrounding whitespace from either source. A key with a trailing newline or
+        # space produces "Illegal header value" and fails as an unopenable connection.
+        key = (api_key or os.environ.get("OPENAI_API_KEY") or "").strip()
         if not key:
             raise RuntimeError("OPENAI_API_KEY is not set; the gateway cannot reach the model.")
-        root = (base_url or os.environ.get("OPENAI_BASE_URL") or "https://api.openai.com/v1").rstrip("/")
+        # Whitespace first, then the trailing slash: rstrip("/") alone leaves a pasted
+        # newline in place and httpx rejects the URL outright (InvalidURL).
+        root = (base_url or os.environ.get("OPENAI_BASE_URL") or "https://api.openai.com/v1").strip().rstrip("/")
         self._client = OpenAI(api_key=key, base_url=root, timeout=timeout, max_retries=max_retries)
 
     def complete(self, *, model, messages, response_format, read_tool_specs, max_output_tokens, temperature) -> RawResponse:  # noqa: ANN001  # pragma: no cover - network path

@@ -37,6 +37,10 @@ def build_app(settings: Settings | None = None):
     logger = get_logger(__name__)
 
     # ── Startup validation: require critical env vars in production/staging ──────────
+    # Stripped here because a dashboard-pasted value routinely carries a trailing newline or
+    # space, and httpx refuses to send it ("Illegal header value"). The stripped value is
+    # passed to OpenAIClient explicitly — previously the client re-read the raw variable from
+    # the environment, discarding this cleanup and failing as an apparent network fault.
     openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
 
     if settings.environment in ("production", "staging"):
@@ -46,12 +50,11 @@ def build_app(settings: Settings | None = None):
     gateway = None
     if openai_key:
         try:
-            gateway = LLMGateway({}, OpenAIClient(base_url=settings.openai_base_url), budget=BudgetTracker(RUNAWAY_FUSE))
+            gateway = LLMGateway({}, OpenAIClient(api_key=openai_key, base_url=settings.openai_base_url), budget=BudgetTracker(RUNAWAY_FUSE))
         except Exception as exc:  # noqa: BLE001 - degrade to AI-disabled rather than crash boot
             logger.warning("llm_gateway_unconfigured", error=str(exc))
     else:
         logger.warning("openai_api_key_absent", detail="AI routes disabled until OPENAI_API_KEY is set on Railway")
-
     verifier = None
     try:
         credential = settings.firebase_service_account_json.get_secret_value() if settings.firebase_service_account_json else None
