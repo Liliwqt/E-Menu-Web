@@ -17,6 +17,9 @@ from touchorders_core.api.auth import IdentityError, IdentityVerifier, VerifiedI
 from touchorders_core.domain.enums import AgentName
 from touchorders_core.llm.budget import BudgetExceeded, LLMUnavailable
 from touchorders_core.llm.gateway import LLMGateway
+from touchorders_core.observability.logging import get_logger
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
@@ -91,6 +94,12 @@ async def chat_completions(
         memory = entitlements.context(grant)
     except Exception as exc:
         entitlements.refund(grant, body.requestId)
+        # The 503 alone cannot be acted on: four unrelated faults land here (unreadable
+        # insights, a model outage, a rejected key, an exhausted balance). The exception
+        # type is the only thing that separates them, and without this line the cause is
+        # invisible outside the process.
+        logger.error("ai_context_unavailable", error_type=type(exc).__name__, error=str(exc),
+                     uid=identity.uid, company=body.companyId, branch=body.branchId, mode=body.mode)
         raise HTTPException(status_code=503, detail="Branch insights are temporarily unavailable") from exc
     if memory:
         system_prompt += "\nPrior dated branch insights (summaries only): " + json.dumps(memory)
@@ -108,12 +117,23 @@ async def chat_completions(
         )
     except BudgetExceeded as exc:
         entitlements.refund(grant, body.requestId)
+        logger.warning("ai_budget_exhausted", uid=identity.uid, company=body.companyId,
+                       branch=body.branchId, mode=body.mode)
         raise HTTPException(status_code=429, detail="AI daily budget reached; please try later") from exc
     except LLMUnavailable as exc:
         entitlements.refund(grant, body.requestId)
+        logger.warning("ai_circuit_open", uid=identity.uid, company=body.companyId,
+                       branch=body.branchId, mode=body.mode, reason=str(exc))
         raise HTTPException(status_code=503, detail="AI temporarily unavailable") from exc
     except Exception as exc:
         entitlements.refund(grant, body.requestId)
+        # OpenAI raises a distinct type per real fault (AuthenticationError for a bad key,
+        # RateLimitError, APIConnectionError), and each needs different action from the
+        # operator. Reporting them all as "AI generation failed" is what made an expired
+        # session, a spent account and a wrong key indistinguishable from the browser.
+        logger.error("ai_generation_failed", error_type=type(exc).__name__, error=str(exc),
+                     model=model, uid=identity.uid, company=body.companyId,
+                     branch=body.branchId, mode=body.mode)
         raise HTTPException(status_code=503, detail="AI generation failed; please try again") from exc
     try:
         entitlements.remember(grant, mode=body.mode, content=content, request_id=body.requestId)
