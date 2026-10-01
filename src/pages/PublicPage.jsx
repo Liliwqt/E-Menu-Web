@@ -43,8 +43,9 @@ function Pricing() {
 
 function Contact() {
   return <>
-    <p className="pub__lead">For subscription, account, privacy, or platform support, contact the E-Menu operator.</p>
+    <p className="pub__lead">For subscription, account, privacy, or platform support, contact the E-Menu operators through the support address below.</p>
     <Section title="Support"><p><ReviewField value={PUBLICATION.businessName} label="business name" /></p><p><ReviewField value={PUBLICATION.philippinesAddress} label="Philippine address" /></p><p>{PUBLICATION.supportEmail ? <a href={`mailto:${PUBLICATION.supportEmail}`}>{PUBLICATION.supportEmail}</a> : <ReviewField label="support email" />}</p><p>{PUBLICATION.supportHours}</p></Section>
+    <Section title="Operators"><ul>{PUBLICATION.operatorContacts.map(name => <li key={name}>{name} — Operator</li>)}</ul></Section>
     <Section title="Customer orders"><p>For an order, product, fulfillment, or order refund request, contact the merchant shown in the ordering app. E-Menu handles the software platform and can help investigate a technical payment-record issue.</p></Section>
   </>;
 }
