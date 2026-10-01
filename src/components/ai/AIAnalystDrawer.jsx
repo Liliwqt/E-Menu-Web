@@ -204,12 +204,21 @@ export default function AIAnalystDrawer({ open, onClose, initialAction = null })
         || '';
       setMessages((prev) => [...prev, { id: nextId(), role: 'ai', text, data: result }]);
     } catch (err) {
+      // The service already worked out what went wrong — aiFailure.js maps a transport
+      // error, a 402, a 429 and a 5xx to distinct, accurate sentences. Swallowing that
+      // and printing one generic line here is what made a fixed host still *look* broken:
+      // every 401, 429, 503 and 404 read identically as "I hit a problem reaching the AI
+      // service", so there was no way to tell a bad host from a spent budget.
+      console.error('[AI Analyst] request failed:', err);
+      const message = typeof err?.message === 'string' ? err.message.trim() : '';
       setMessages((prev) => [...prev, {
         id: nextId(),
         role: 'ai',
-        text: err.message?.includes('API key')
+        // A missing key is the one case worth naming outright, because no amount of
+        // retrying fixes it. Everything else keeps the reason the service gave.
+        text: /api key/i.test(message)
           ? 'The AI service is not configured — the OpenAI key is missing.'
-          : 'I hit a problem reaching the AI service. Try again in a moment.',
+          : message || 'I hit a problem reaching the AI service. Try again in a moment.',
       }]);
     } finally {
       setBusy(false);

@@ -2,6 +2,7 @@ import { pilotAiConfig } from './pilotAiConfig';
 import { fetchWithAppCheck, branchDataPath } from './firebase';
 import { buildSystemPrompt, buildDataPrompt, parseModelJson } from './aiPrompts';
 import { describeAiFailure } from './aiFailure';
+import { readAiErrorDetail } from './aiErrorDetail';
 
 const CACHE_KEY_PREFIX = 'ai_analyst_cache_v2_';
 
@@ -99,13 +100,19 @@ async function requestAnalysis(analyticsData, mode, branchId) {
   }
 
   if (!response.ok) {
-    let errorDetail = '';
+    // FastAPI reports every error as {"detail": "..."} — the only field it sets.
+    // This used to read .error.message then .message (the OpenAI shape this client
+    // originally spoke) and fall back to stringifying the whole body, so the useful
+    // reason was always dropped and the drawer showed one generic line. readAiErrorDetail
+    // knows the backend's actual shapes, and returns '' when there is nothing usable so
+    // the status can be named instead of printing a blob.
+    let body = null;
     try {
-      const errData = await response.json();
-      errorDetail = errData?.error?.message || errData?.message || JSON.stringify(errData);
+      body = await response.json();
     } catch {
-      errorDetail = `HTTP ${response.status}`;
+      body = null;
     }
+    const errorDetail = readAiErrorDetail(body) || `HTTP ${response.status}`;
     console.error('[AI Analysis] backend refused the request:', response.status, errorDetail);
     throw new Error(describeAiFailure({ status: response.status, detail: errorDetail }));
   }
