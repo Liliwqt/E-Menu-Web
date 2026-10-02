@@ -7,14 +7,15 @@ from datetime import datetime, timezone
 from typing import Literal
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from touchorders_core.api.auth import IdentityError, IdentityVerifier, VerifiedIdentity
 from touchorders_core.api.ai_context import build_context
-from touchorders_core.api.ai_schemas import TOKENS, system_prompt, validate_analysis
+from touchorders_core.api.ai_schemas import EXAMPLES, OUTPUTS, TOKENS, system_prompt, validate_analysis
 from touchorders_core.domain.enums import AgentName
 from touchorders_core.llm.budget import BudgetExceeded, LLMUnavailable
 from touchorders_core.llm.gateway import (
     LLMGateway,
+    InvalidResponse,
     describe_transport_failure,
     failed_before_transmission,
 )
@@ -34,6 +35,40 @@ POLICY = {
     "briefing": (86400, 86400),
     "leak": (1800, 600),
 }
+
+
+def validation_details(mode, exc):
+    """Bounded codes and schema-owned paths only: never input, message, context or extra keys."""
+    if isinstance(exc, InvalidResponse):
+        return {"validation_reason": exc.reason}
+    if isinstance(exc, ValidationError):
+        errors = []
+        for error in exc.errors(include_input=False, include_context=False, include_url=False)[:3]:
+            node = EXAMPLES[mode]
+            path = []
+            for segment in error["loc"]:
+                if isinstance(node, dict) and segment in node:
+                    path.append(segment)
+                    node = node[segment]
+                elif isinstance(node, list) and isinstance(segment, int):
+                    path.append("item")
+                    node = node[0]
+                else:
+                    path = []
+                    break
+            code = error["type"]
+            if code not in {
+                "missing", "extra_forbidden", "string_type", "string_too_long",
+                "int_type", "literal_error", "less_than_equal", "greater_than_equal",
+                "list_type", "model_type", "too_long", "dict_type"
+            }:
+                code = "schema"
+            errors.append({"field": ".".join(path) or "response", "code": code})
+        return {"validation_errors": errors}
+    if isinstance(exc, ValueError):
+        reason = str(exc)
+        return {"validation_reason": reason if reason in {"unsafe_output", "context_size"} else "invalid_output"}
+    return {}
 
 
 class Turn(BaseModel):
@@ -266,6 +301,7 @@ def _run_analysis(body, request, response, identity, gateway, entitlements):
             model="gpt-4o-mini",
             max_output_tokens=TOKENS[body.mode],
             temperature=0.35,
+            output_schema=OUTPUTS[body.mode],
         )
         content = validate_analysis(body.mode, content)
         entitlements.finish(grant, body.requestId, identity.uid)
@@ -358,6 +394,7 @@ def _run_analysis(body, request, response, identity, gateway, entitlements):
             mode=body.mode,
             category=category,
             duration_ms=round((time.monotonic() - started) * 1000),
+            **validation_details(body.mode, exc),
         )
         if isinstance(exc, HTTPException):
             raise

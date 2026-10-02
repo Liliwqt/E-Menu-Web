@@ -52,6 +52,12 @@ All supplied business data and conversation live in the user message. Server ins
 are separate. There are no AI tools, URL fetches, database writes or generated links.
 Output must match its mode schema; unknown fields, invalid sizes, credential-like text
 and invalid values fail closed. The existing UI renders ordinary React text.
+The provider receives that same Pydantic contract as strict `json_schema`, including
+nullable simulation fields, text bounds and required keys; generic JSON mode is not
+enough to enforce it. See [OpenAI Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs).
+Truncated, filtered, refused, empty or malformed completions fail without a corrective
+provider replay. Their reported token usage remains counted; receiving an invalid
+answer does not open the transport circuit breaker.
 
 ## Limits, cache and retries
 
@@ -120,6 +126,10 @@ It makes no paid provider probe. Recent success expires after 15 minutes. Readin
 not replace a signed-in smoke test. Failure diagnostics use categories, hashed branch
 scope, request UUID, timings and token counts; no prompt, response, raw exception chain
 or provider body is logged. A final filter also scrubs third-party and access logs.
+Validation failures additionally report bounded reason codes and schema-owned field
+paths, such as `answer` / `string_too_long`. Unknown output keys, input values,
+Pydantic messages/context and refusal text are omitted. Match the request UUID when
+diagnosing a 503; category `validation` alone does not identify the rejected field.
 
 `store=false` does not itself guarantee provider-level Zero Data Retention. Review the
 operator's applicable provider data controls before making retention promises.

@@ -41,6 +41,18 @@ class OutputRejected(RuntimeError):
     """A response failed schema or post-validation after the single corrective re-prompt (§14.4)."""
 
 
+class InvalidResponse(ValueError):
+    """A provider response cannot be consumed; retain only a fixed safe reason."""
+
+    def __init__(self, reason: str, *, input_tokens: int = 0, output_tokens: int = 0):
+        self.reason = reason if reason in {
+            "truncated", "filtered", "refused", "invalid_json", "empty", "incomplete"
+        } else "incomplete"
+        self.input_tokens = input_tokens
+        self.output_tokens = output_tokens
+        super().__init__(self.reason)
+
+
 def describe_transport_failure(exc: BaseException, *, max_depth: int = 6) -> str:
     """Classify a bounded, cycle-safe cause chain without exposing its values."""
     import ssl
@@ -205,9 +217,24 @@ class OpenAIClient:
             completion = self._client.chat.completions.create(**kwargs)
         choice = completion.choices[0]
         usage = completion.usage
+        usage_counts = dict(input_tokens=getattr(usage, "prompt_tokens", 0) or 0,
+                            output_tokens=getattr(usage, "completion_tokens", 0) or 0)
+        if choice.finish_reason == "length":
+            raise InvalidResponse("truncated", **usage_counts)
+        if choice.finish_reason == "content_filter":
+            raise InvalidResponse("filtered", **usage_counts)
+        if choice.message.refusal:
+            raise InvalidResponse("refused", **usage_counts)
+        if choice.finish_reason not in ("stop", "tool_calls"):
+            raise InvalidResponse("incomplete", **usage_counts)
         cached = getattr(getattr(usage, "prompt_tokens_details", None), "cached_tokens", 0) or 0
         tool_calls = [ToolCall(id=tc.id, name=tc.function.name, arguments=json.loads(tc.function.arguments or "{}")) for tc in (choice.message.tool_calls or [])]
-        content = json.loads(choice.message.content) if choice.message.content else None
+        if not choice.message.content and not tool_calls:
+            raise InvalidResponse("empty", **usage_counts)
+        try:
+            content = json.loads(choice.message.content) if choice.message.content else None
+        except (json.JSONDecodeError, TypeError):
+            raise InvalidResponse("invalid_json", **usage_counts) from None
         return RawResponse(content=content, tool_calls=tool_calls, input_tokens=getattr(usage, "prompt_tokens", 0), cached_input_tokens=cached, output_tokens=getattr(usage, "completion_tokens", 0))
 
 
@@ -255,13 +282,14 @@ class LLMGateway:
         model: str,
         max_output_tokens: int,
         temperature: float,
+        output_schema: type[BaseModel],
         correlation_id: str | None = None,
     ) -> tuple[dict[str, Any], int, int]:
-        """JSON-object completion for the dashboard BFF (§13.4).
+        """Schema-constrained completion for the dashboard BFF (§13.4).
 
-        Distinct from ``structured_call`` (strict json_schema for the agents), this returns the
-        free-form JSON object the dashboard renders. It goes through the same budget gate, circuit
-        breaker, and single OpenAI client. Returns (content, input_tokens, output_tokens).
+        Use the same contract as the endpoint's post-validation, rather than asking for generic
+        JSON and rejecting normal answers afterward. This retains the budget gate and single
+        OpenAI client, without a second paid corrective generation.
         """
         self._budget.ensure_available(agent)
         messages = [
@@ -270,9 +298,15 @@ class LLMGateway:
         ]
         try:
             response = self._client.complete(
-                model=model, messages=messages, response_format={"type": "json_object"},
+                model=model, messages=messages, response_format=strict_response_format(output_schema),
                 read_tool_specs=[], max_output_tokens=max_output_tokens, temperature=temperature,
             )
+        except InvalidResponse as exc:
+            # A refusal or truncated response is received provider work, not a network outage.
+            self._budget.record_usage(agent, input_tokens=exc.input_tokens, output_tokens=exc.output_tokens)
+            self._budget.record_success(agent)
+            self._metrics.increment("llm_calls_total", agent=agent.value, outcome="rejected")
+            raise
         except Exception:
             self._budget.record_failure(agent)
             self._metrics.increment("llm_calls_total", agent=agent.value, outcome="error")
@@ -312,7 +346,9 @@ class LLMGateway:
 
         try:
             content, in_tokens, out_tokens = self._run(agent, config, messages, response_format, read_tool_specs or [], read_tool_runner, output_schema, allowed_numbers, echo_keys, purpose)
-        except OutputRejected:
+        except (OutputRejected, InvalidResponse) as exc:
+            if isinstance(exc, InvalidResponse):
+                self._budget.record_usage(agent, input_tokens=exc.input_tokens, output_tokens=exc.output_tokens)
             self._budget.record_success(agent)  # a rejected output is not a transport failure
             self._metrics.increment("llm_calls_total", agent=agent.value, outcome="rejected")
             raise
