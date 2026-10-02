@@ -207,6 +207,11 @@ class OpenAIClient:
     def complete(self, *, model, messages, response_format, read_tool_specs, max_output_tokens, temperature) -> RawResponse:  # noqa: ANN001  # pragma: no cover - network path
         wire_messages = [{k: v for k, v in m.items() if k != "purpose"} for m in messages]
         kwargs: dict[str, Any] = {"model": model, "messages": wire_messages, "response_format": response_format, "max_completion_tokens": max_output_tokens, "temperature": temperature, "store": False}
+        if model == "gpt-6-luna":
+            # Preserve the dashboard's non-reasoning latency/output budget instead of
+            # inheriting Luna's medium default. Omit legacy sampling parameters.
+            kwargs.pop("temperature")
+            kwargs["reasoning_effort"] = "none"
         if read_tool_specs:
             kwargs["tools"] = read_tool_specs
         try:

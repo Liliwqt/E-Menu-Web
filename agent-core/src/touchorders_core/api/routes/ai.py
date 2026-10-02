@@ -298,7 +298,7 @@ def _run_analysis(body, request, response, identity, gateway, entitlements):
             purpose="dashboard_analysis",
             system_prompt=system_prompt(body.mode, grant.plan),
             user_prompt=payload,
-            model="gpt-4o-mini",
+            model="gpt-6-luna",
             max_output_tokens=TOKENS[body.mode],
             temperature=0.35,
             output_schema=OUTPUTS[body.mode],

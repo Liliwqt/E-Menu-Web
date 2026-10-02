@@ -63,7 +63,8 @@ answer does not open the transport circuit breaker.
 
 - Request: 64 KiB, including chunked bodies; question: 2,000 characters; conversation:
   10 turns of 400 characters. Provider input is bounded at 32,000 characters.
-- Model: server-owned gpt-4o-mini. Mode output limits range from 350 to 2,600 tokens.
+- Model: server-owned gpt-6-luna with explicit reasoning_effort=none. Mode output limits range from 350 to 2,600 tokens.
+  Legacy temperature is omitted; existing token caps and timeout remain unchanged.
   Optional context rows are deterministically pruned and truncation is disclosed;
   recorded totals are preserved.
 - Authenticated attempts, including cache hits: 6 per UID and 20 per branch per minute.

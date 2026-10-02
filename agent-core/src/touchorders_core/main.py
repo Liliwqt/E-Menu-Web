@@ -23,7 +23,7 @@ from touchorders_core.settings import Settings, get_settings
 
 # Global daily token fuse (per process). Branch-wide allowances are enforced in
 # Firebase. This only caps catastrophic runaway (a bug or abuse storm)
-# at roughly $6 input + $5 output per day on gpt-4o-mini across ALL tenants. All BFF traffic
+# at roughly $4 input + $4 output per day on gpt-6-luna across ALL tenants. All BFF traffic
 # bills to the BUSINESS_ANALYST role. Sized for ~500 cafes at post-optimization usage.
 RUNAWAY_FUSE = {AgentName.BUSINESS_ANALYST: DailyBudget(input=40_000_000, output=8_000_000)}
 

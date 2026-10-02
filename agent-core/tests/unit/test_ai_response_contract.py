@@ -28,7 +28,7 @@ def provider_app(mode, *, answer="Recorded revenue is ₱1,250 from 24 orders.",
         calls.append(json.loads(request.content))
         return httpx.Response(200, json={
             "id": "chatcmpl-fixture", "object": "chat.completion", "created": 1,
-            "model": "gpt-4o-mini",
+            "model": "gpt-6-luna",
             "choices": [{"index": 0, "finish_reason": finish_reason,
                          "message": {"role": "assistant", "refusal": refusal,
                                      "content": content if content is not None else json.dumps(result)}}],
@@ -53,6 +53,9 @@ def test_analysis_sends_its_actual_bounded_contract_to_provider(mode):
             )))
         assert response.status_code == 200, response.text
         wire = calls[0]
+        assert wire["model"] == "gpt-6-luna"
+        assert wire["reasoning_effort"] == "none"
+        assert "temperature" not in wire
         assert wire["response_format"]["type"] == "json_schema"
         contract = wire["response_format"]["json_schema"]
         assert contract["strict"] is True

@@ -158,7 +158,7 @@ def test_authenticated_server_owned_response_and_context():
         assert canary not in payload
     context = json.loads(payload)["context"]
     assert context["summary"]["totalRevenue"] == 1250
-    assert call["model"] == "gpt-4o-mini" and call["max_output_tokens"] == 350
+    assert call["model"] == "gpt-6-luna" and call["max_output_tokens"] == 350
 
 
 @pytest.mark.parametrize("role", ["staff", "outsider"])
