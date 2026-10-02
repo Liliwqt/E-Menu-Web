@@ -1,27 +1,83 @@
-.pub { min-height: 100%; background: var(--bg); color: var(--text-1); font-family: var(--font-ui); }
+/* Public pages: /about /pricing /contact /help /terms /privacy /cookies
+   /acceptable-use /refund-policy
+
+   NOTE: no vh/dvh/svh/lvh anywhere in this file. The Android WebView resolves all
+   of them to 0px (verified on WebView 151.0.7922.199 in both orientations), which
+   silently collapses any max-height built on them. Use % or a flex chain instead.
+   Guarded by src/lib/noViewportHeightUnits.test.js. */
+
+/* The sticky header wraps to two rows on a narrow phone and one row on a desktop,
+   so its height is not a constant — measured at 124px vs 126px. A literal cannot
+   follow that, nor a rotation or a font-size change. PublicPage measures the
+   header and publishes `--pub-header-h`, which `scroll-margin-top` below then
+   consumes, so a jumped-to heading always clears the header. */
+.pub {
+  --pub-header-h: 124px;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text-1);
+  font-family: var(--font-ui);
+  /* Long words, URLs, email addresses and branch IDs have no spaces, so without
+     an explicit break rule they push the page sideways. `anywhere` is preferred
+     over `break-word` because it also applies to the min-content contribution,
+     which is what decides whether a grid or flex track overflows. */
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
 .pub a { color: var(--primary); text-underline-offset: 3px; }
 .pub a:hover { color: var(--primary-strong); }
-.pub a:focus-visible, .pub button:focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
-.pub__header { background: var(--surface); border-bottom: 1px solid var(--border); }
-.pub__headerInner { max-width: 1180px; margin: auto; padding: 16px 24px; display: flex; align-items: center; flex-wrap: wrap; gap: 18px 28px; }
-.pub__brand { font-size: 1.4rem; font-weight: 800; text-decoration: none; white-space: nowrap; }
-.pub__nav { display: flex; align-items: center; gap: 8px 18px; flex-wrap: wrap; flex: 1; }
-.pub__nav a { color: var(--text-2); text-decoration: none; font-size: .88rem; padding: 8px 0; }
-.pub__nav a[aria-current='page'] { color: var(--primary); font-weight: 700; border-bottom: 2px solid var(--primary); }
+.pub a:focus-visible, .pub button:focus-visible, .pub summary:focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; border-radius: 4px; }
+
+.pub__skip { position: absolute; left: -9999px; top: 0; padding: 12px 18px; background: var(--primary); color: var(--on-primary); z-index: 20; border-radius: 0 0 var(--r-md) 0; }
+.pub__skip:focus { left: 0; }
+
+/* ---- Header ---------------------------------------------------------------- */
+.pub__header { background: var(--surface); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 10; }
+.pub__headerInner { max-width: 1180px; margin: auto; padding: 14px 24px; display: flex; align-items: center; flex-wrap: wrap; gap: 12px 24px; }
+.pub__brand { font-size: 1.35rem; font-weight: 800; text-decoration: none; white-space: nowrap; }
+.pub__nav { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; flex: 1; }
+.pub__nav a { color: var(--text-2); text-decoration: none; font-size: .9rem; padding: 10px 12px; min-height: 44px; display: inline-flex; align-items: center; border-radius: var(--r-md); }
+.pub__nav a:hover { color: var(--text-1); background: var(--bg); }
+.pub__nav a[aria-current='page'] { color: var(--primary); font-weight: 700; background: var(--primary-soft); }
 .pub__actions { display: flex; align-items: center; gap: 10px; }
-.pub__actions a, .pub__actions button { min-height: 44px; padding: 10px 14px; border-radius: var(--r-md); font: inherit; font-weight: 700; white-space: nowrap; }
+.pub__actions a, .pub__actions button { min-height: 44px; padding: 10px 16px; border-radius: var(--r-md); font: inherit; font-weight: 700; white-space: nowrap; }
 .pub__actions a { color: var(--on-primary); background: var(--primary); text-decoration: none; }
 .pub__actions a:hover { color: var(--on-primary); background: var(--primary-strong); }
 .pub__actions button { border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-1); cursor: pointer; }
-.pub__main { max-width: 1060px; padding: 40px 24px 72px; margin: auto; }
-.pub__main h1 { font-size: clamp(2rem, 5vw, 3rem); line-height: 1.15; margin: 20px 0 20px; }
-.pub__lead { max-width: 780px; font-size: 1.08rem; line-height: 1.7; color: var(--text-2); margin: 0 0 32px; }
-.pub__notice { display: inline-block; padding: 10px 14px; border: 1px solid var(--warning); border-radius: var(--r-md); background: var(--warning-soft); color: var(--text-1); font-size: .9rem; font-weight: 700; }
-.pub__section, .pub__plan { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 24px; margin: 0 0 20px; box-shadow: var(--shadow-sm); }
-.pub__section h2, .pub__plan h2 { font-size: 1.2rem; line-height: 1.35; margin: 0 0 12px; }
-.pub__section p, .pub__plan li { color: var(--text-2); line-height: 1.7; }
+
+/* ---- Layout: contents sidebar + article ------------------------------------- */
+.pub__layout { max-width: 1180px; margin: auto; padding: 0 24px; display: grid; grid-template-columns: 1fr; }
+.pub__main { padding: 40px 0 72px; min-width: 0; }
+.pub__main h1 { font-size: clamp(1.9rem, 4.5vw, 2.8rem); line-height: 1.15; margin: 20px 0 20px; }
+.pub__lead { max-width: 760px; font-size: 1.08rem; line-height: 1.7; color: var(--text-2); margin: 0 0 32px; }
+.pub__notice { display: inline-block; padding: 10px 14px; border: 1px solid var(--warning); border-radius: var(--r-md); background: var(--warning-soft); color: var(--text-1); font-size: .9rem; font-weight: 700; margin-bottom: 8px; }
+
+/* ---- Contents navigation ---------------------------------------------------- */
+.pub__contentsToggle { display: none; width: 100%; min-height: 48px; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; margin: 24px 0 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md); color: var(--text-1); font: inherit; font-weight: 700; cursor: pointer; text-align: left; }
+.pub__contentsToggle::after { content: '▾'; color: var(--text-2); }
+.pub__contents[data-open='true'] .pub__contentsToggle::after { content: '▴'; }
+.pub__contentsList { list-style: none; margin: 0; padding: 0; }
+.pub__contentsList li { margin: 0 0 2px; }
+.pub__contentsList a { display: block; padding: 8px 10px; min-height: 44px; display: flex; align-items: center; font-size: .88rem; color: var(--text-2); text-decoration: none; border-left: 2px solid var(--border); border-radius: 0 var(--r-sm) var(--r-sm) 0; }
+.pub__contentsList a:hover { color: var(--primary); border-left-color: var(--primary); background: var(--bg); }
+
+/* ---- Article sections ------------------------------------------------------- */
+.pub__section, .pub__plan { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 26px; margin: 0 0 20px; box-shadow: var(--shadow-sm); scroll-margin-top: calc(var(--pub-header-h) + 16px); }
+.pub__section h2, .pub__plan h2 { font-size: 1.18rem; line-height: 1.35; margin: 0 0 12px; }
+.pub__section p, .pub__plan li, .pub__list li { color: var(--text-2); line-height: 1.75; }
 .pub__section p { margin: 0 0 12px; }
-.pub__section p:last-child { margin-bottom: 0; }
+.pub__section p:last-child, .pub__section ul:last-child { margin-bottom: 0; }
+.pub--article .pub__main { max-width: 72ch; }
+.pub--article .pub__section {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  margin-bottom: 32px;
+  box-shadow: none;
+}
+.pub__list { padding-left: 22px; margin: 0; }
+.pub__list li { margin: 0 0 10px; }
 .pub__grid { display: grid; gap: 20px; align-items: stretch; }
 .pub__grid--two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .pub__grid--three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -31,6 +87,68 @@
 .pub__plan ul { padding-left: 20px; margin: 0; }
 .pub__plan li { margin: 0 0 8px; }
 .pub__review { display: inline; color: var(--danger); font-weight: 700; }
-.pub__footer { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; padding: 24px; border-top: 1px solid var(--border); background: var(--surface); }
-@media (max-width: 760px) { .pub__grid--three { grid-template-columns: 1fr; } .pub__headerInner { align-items: flex-start; } .pub__nav { order: 3; flex-basis: 100%; } }
-@media (max-width: 560px) { .pub__grid--two { grid-template-columns: 1fr; } .pub__main { padding: 28px 16px 56px; } .pub__headerInner { padding: 12px 16px; } .pub__section, .pub__plan { padding: 20px; } }
+
+/* ---- Contact card ----------------------------------------------------------- */
+.pub__contactCard { background: var(--primary-soft); border: 1px solid var(--primary); border-radius: var(--r-lg); padding: 26px; margin: 0 0 24px; }
+.pub__contactLabel { margin: 0 0 8px; font-size: .82rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--text-2); }
+.pub__contactEmail { display: inline-block; font-size: clamp(1.05rem, 2.4vw, 1.4rem); font-weight: 800; word-break: break-word; min-height: 44px; }
+.pub__contactHours { margin: 12px 0 0; color: var(--text-2); }
+.pub__contactNote { margin: 8px 0 0; font-size: .86rem; color: var(--text-2); }
+
+/* ---- Footer ---------------------------------------------------------------- */
+.pub__footer { border-top: 1px solid var(--border); background: var(--surface); padding: 36px 24px 44px; }
+.pub__footerGrid { max-width: 1180px; margin: auto; display: grid; gap: 28px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.pub__footerGroup h2 { font-size: .82rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--text-2); margin: 0 0 12px; }
+.pub__footerGroup ul { list-style: none; margin: 0; padding: 0; }
+.pub__footerGroup li { margin: 0 0 2px; }
+.pub__footerGroup a { display: inline-flex; align-items: center; min-height: 44px; padding: 6px 0; color: var(--text-2); text-decoration: none; font-size: .9rem; }
+.pub__footerGroup a:hover { color: var(--primary); text-decoration: underline; }
+.pub__footerBase { max-width: 1180px; margin: 28px auto 0; color: var(--text-2); font-size: .86rem; }
+
+/* ---- Tablet and up: sidebar contents ---------------------------------------- */
+@media (min-width: 900px) {
+  .pub__layout { grid-template-columns: 230px minmax(0, 1fr); gap: 40px; }
+  .pub__contents { position: sticky; top: calc(var(--pub-header-h) + 12px); align-self: start; max-height: calc(100% - var(--pub-header-h) - 12px); overflow-y: auto; padding-top: 40px; }
+  .pub__contentsList { border-left: 1px solid var(--border); }
+  .pub__main { padding-top: 40px; }
+}
+
+/* ---- Phones: stack, no horizontal scroll ------------------------------------ */
+@media (max-width: 899px) {
+  .pub__layout { padding: 0 16px; }
+  .pub__contentsToggle { display: flex; }
+  /* Collapsed by default; the article below is never hidden. */
+  .pub__contentsList { display: none; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); padding: 8px; margin-top: 8px; }
+  .pub__contentsList--open { display: block; }
+  .pub__contentsList a { border-left: none; }
+  .pub__headerInner { padding: 12px 16px; gap: 10px 16px; }
+  .pub__nav { order: 3; flex-basis: 100%; gap: 2px; }
+  .pub__actions { margin-left: auto; }
+}
+
+@media (max-width: 560px) {
+  .pub__grid--two, .pub__grid--three { grid-template-columns: 1fr; }
+  .pub__main { padding: 24px 0 56px; }
+  .pub__section, .pub__plan, .pub__contactCard { padding: 20px; }
+  .pub__footer { padding: 28px 16px 36px; }
+  .pub__headerInner { gap: 8px 12px; }
+  .pub__brand { font-size: 1.2rem; }
+}
+
+/* ---- Very narrow (320px): nothing may force a sideways scroll -------------- */
+@media (max-width: 360px) {
+  .pub__actions button { padding: 10px 12px; }
+  .pub__nav a { padding: 10px 8px; font-size: .86rem; }
+  .pub__contactEmail { font-size: 1rem; }
+}
+
+/* ---- Motion, contrast, forced colors ---------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .pub *, .pub *::before, .pub *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
+
+@media (forced-colors: active) {
+  .pub__section, .pub__plan, .pub__contactCard, .pub__contentsList { border: 1px solid CanvasText; }
+  .pub--article .pub__section { border: 0; }
+  .pub__nav a[aria-current='page'] { outline: 2px solid Highlight; }
+}

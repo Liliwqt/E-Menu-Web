@@ -238,9 +238,10 @@
 .lg__footer {
   display: flex;
   justify-content: center;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 8px 16px;
-  padding-top: 16px;
+  gap: 4px 18px;
+  padding-top: 12px;
   border-top: 1px solid #4a4a4a;
   font-size: 13px;
 }
@@ -253,8 +254,39 @@
   font: inherit;
   font-size: 13px;
   transition: color 150ms ease;
+  /* 44px minimum target for touch, without changing the visual density of a
+     row of small text links. */
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
 }
 .lg__footerLink:hover { color: #d4b584; text-decoration: underline; }
+.lg__footerLink:focus-visible { outline: 3px solid #d4b584; outline-offset: 3px; border-radius: 4px; }
+.lg__footerLink--strong { font-weight: 700; }
+
+/* Secondary destinations. A disclosure rather than seven links in a row, which
+   wrapped badly on a 320px phone. */
+.lg__more { position: relative; display: inline-flex; }
+.lg__moreToggle::after { content: ' ▾'; color: #9d9d9d; }
+.lg__moreToggle[aria-expanded='true']::after { content: ' ▴'; }
+.lg__moreList {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  list-style: none;
+  margin: 0;
+  padding: 8px;
+  min-width: 200px;
+  background: #1f1f1f;
+  border: 1px solid #4a4a4a;
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  text-align: left;
+}
+.lg__moreList li { margin: 0; }
+.lg__moreList .lg__footerLink { display: flex; width: 100%; padding: 0 10px; }
 
 .lg__powered {
   color: #9d9d9d;
@@ -290,59 +322,43 @@
   color: #d4b584;
 }
 
-/* Policy info modal — V1 styling */
-.lg__modalOverlay {
-  position: fixed;
-  inset: 0;
-  z-index: var(--z-modal);
-  background: rgba(0, 0, 0, 0.58);
-  display: flex;
+/* Help overlay body. The dialog chrome itself comes from components/ui/Modal,
+   which owns the focus trap, Escape handling, focus return and scroll lock that
+   the previous hand-rolled .lg__modal overlay did not implement.
+
+   These colours are theme tokens, not literals. The overlay is portalled to
+   <body> and inherits the document theme, so a fixed #e6d6bd measured 1.43:1
+   against the light surface — effectively invisible in light mode while looking
+   perfect in dark mode, because that hex was chosen for the dark palette. */
+.lg__help { display: flex; flex-direction: column; gap: 18px; }
+.lg__help section { margin: 0; }
+.lg__help h3 { margin: 0 0 6px 0; color: var(--text-1); font-size: 15px; font-family: 'Fraunces', serif; font-weight: 700; }
+.lg__help p { margin: 0; color: var(--text-2); font-size: 14px; line-height: 1.6; }
+.lg__help strong { color: var(--text-1); }
+.lg__helpMail {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  padding: 20px;
-  animation: fadeIn var(--dur-fast) ease backwards;
+  min-height: 44px;
+  color: var(--primary);
+  font-weight: 700;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
-
-.lg__modal {
-  width: min(520px, 100%);
-  /* Parent is .lg__modalOverlay (position: fixed; inset: 0) — `%`, not `88dvh`. */
-  max-height: min(680px, 90%);
-  overflow: auto;
-  background: #2d2d2d;
-  border: 1px solid #5a5a5a;
-  border-radius: 8px;
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
-  color: #f5e6d3;
-  animation: scaleIn var(--dur-med) var(--ease-out) backwards;
-}
-
-.lg__modalHead {
-  display: flex;
+.lg__helpMail:hover { color: var(--primary-strong); }
+.lg__helpMail:focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; border-radius: 4px; }
+.lg__helpHours { font-size: 13px; color: var(--text-2); }
+.lg__help .lg__helpNote { margin-top: 8px; font-size: 12px; color: var(--text-2); }
+.lg__helpMore {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 20px 22px;
-  border-bottom: 1px solid #4a4a4a;
+  min-height: 44px;
+  color: var(--primary);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
-
-.lg__modalHead h2 { margin: 0; color: #c4a574; font-size: 20px; font-family: 'Fraunces', serif; font-weight: 700; }
-
-.lg__modalClose {
-  width: 32px;
-  height: 32px;
-  border: 1px solid #5a5a5a;
-  border-radius: 4px;
-  background: #3a3a3a;
-  color: #c4a574;
-  display: grid;
-  place-items: center;
-  transition: background 150ms ease, color 150ms ease;
-}
-.lg__modalClose:hover { background: #454545; color: #d4b584; }
-
-.lg__modalBody { display: flex; flex-direction: column; gap: 18px; padding: 22px; }
-.lg__modalBody h3 { margin: 0 0 6px 0; color: #d4b584; font-size: 15px; font-family: 'Fraunces', serif; font-weight: 700; }
-.lg__modalBody p { margin: 0; color: #e6d6bd; font-size: 14px; line-height: 1.55; }
+.lg__helpMore:hover { color: var(--primary-strong); }
+.lg__helpMore:focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; border-radius: 4px; }
 
 @media (max-width: 480px) {
   .lg__box { padding: 32px 24px; }

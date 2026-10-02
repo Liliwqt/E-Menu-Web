@@ -1,14 +1,32 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
-import { PUBLICATION, PUBLIC_PAGES, publicationIssues, subscriptionCancellationEmail } from './publicSiteContent.js';
+import { PUBLICATION, PUBLIC_PAGES, PUBLIC_NAV, publicationIssues } from './publicSiteContent.js';
 import { PLAN_BASIC, PLAN_STARTER, PLAN_PREMIUM, PLAN_PRICE_PHP } from './planFeatures.js';
 
 test('draft business and policy details block public Hosting release', () => {
   assert.ok(publicationIssues(PUBLICATION).length > 0);
+  // Pinned deliberately: `check-public-release.mjs` iterates PUBLIC_PAGES and
+  // blocks a Hosting deploy if any listed route is missing from App.jsx, so adding
+  // a page here without adding its route would fail the deploy rather than the
+  // suite. /help, /cookies and /acceptable-use were added on 2026-10-02.
   assert.deepEqual(PUBLIC_PAGES.map(([path]) => path), [
-    'about', 'pricing', 'contact', 'terms', 'privacy', 'refund-policy',
+    'about', 'pricing', 'contact', 'help',
+    'terms', 'privacy', 'cookies', 'acceptable-use',
+    'refund-policy',
   ]);
+});
+
+test('every listed public page also has a header route', () => {
+  // The header carries a subset, so this must be a subset check rather than equality.
+  const headerPaths = PUBLIC_NAV.map(([path]) => path);
+  for (const path of headerPaths) {
+    assert.ok(PUBLIC_PAGES.some(([listed]) => listed === path), `${path} is in the header but not in PUBLIC_PAGES`);
+  }
+  // And the pages a reader needs but does not want in the header must still be reachable.
+  for (const path of ['help', 'cookies', 'acceptable-use', 'refund-policy', 'terms', 'privacy']) {
+    assert.ok(PUBLIC_PAGES.some(([listed]) => listed === path), `${path} must remain a public page`);
+  }
 });
 
 test('completed details pass while placeholders and bad contact emails fail', () => {
@@ -31,14 +49,16 @@ test('approval alone cannot bypass known missing policy functionality', () => {
   assert.ok(publicationIssues({ ...PUBLICATION, releaseBlockers: undefined }).includes('Publication blockers have not been reviewed'));
 });
 
-test('cancellation email safely includes only the selected company and branch', () => {
-  const url = new URL(subscriptionCancellationEmail('company-test&bcc=other@example.test', 'branch-one\nTwo'));
-  assert.equal(url.pathname, 'touch.support1@gmail.com');
-  assert.equal(url.searchParams.size, 2);
-  assert.equal(url.searchParams.get('subject'), 'E-Menu subscription cancellation request');
-  assert.match(url.searchParams.get('body'), /Company ID: company-test&bcc=other@example.test/);
-  assert.match(url.searchParams.get('body'), /Branch ID: branch-one\nTwo/);
-  assert.match(url.searchParams.get('body'), /opening this email does not cancel/);
+test('shared public facts describe the active cancellation and payment controls', () => {
+  assert.match(PUBLICATION.subscriptionCancellationTerms, /owner.*cancel.*Subscription page/is);
+  assert.match(PUBLICATION.subscriptionCancellationTerms, /immediately ends subscription benefits/i);
+  assert.match(PUBLICATION.subscriptionCancellationTerms, /does not itself issue a refund/i);
+  assert.doesNotMatch(PUBLICATION.subscriptionCancellationTerms, /email request|contact.*to cancel/i);
+  assert.match(PUBLICATION.customerPaymentNotice, /not proof that funds were received/i);
+  assert.match(PUBLICATION.customerPaymentNotice, /only after the payment provider confirms it/i);
+  assert.match(PUBLICATION.customerPaymentNotice, /not yet enabled in the current release/i);
+  assert.match(PUBLICATION.dataRetentionSummary, /Automatic inactivity deletion is not yet active/i);
+  assert.equal(PUBLICATION.status, 'draft');
 });
 
 test('public plan prices share the application tier values', () => {

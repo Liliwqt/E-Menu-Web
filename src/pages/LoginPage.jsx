@@ -1,37 +1,30 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, X, Chrome } from 'lucide-react';
+import { Eye, EyeOff, Chrome } from 'lucide-react';
+import Modal from '../components/ui/Modal';
 import { useAuth } from '../context/AuthContext';
 import { getUserBranch } from '../config/authConfig';
 import { isEmbeddedInApp } from '../lib/deviceBridge';
+import { PUBLICATION } from '../lib/publicSiteContent';
 import '../styles/login.css';
 
-const FOOTER_CONTENT = {
-  help: {
-    title: 'Need Help',
-    sections: [
-      { heading: 'Contact', body: 'For access or account support, contact your restaurant administrator or system support team. Include your branch name, registered email, and a short description of the issue.' },
-      { heading: 'Basic Troubleshooting', body: 'Check your internet connection, confirm that your email address is entered correctly, and refresh the page if the login form does not respond.' },
-      { heading: 'Login Assistance', body: 'Use Forgot Password to request a reset link. For branch access changes, ask the administrator to verify that your email is assigned to the correct branch.' },
-    ],
-  },
-  cookies: {
-    title: 'Cookie Notice',
-    sections: [
-      { heading: 'Session Usage', body: 'The portal uses browser storage to keep users signed in securely during active sessions.' },
-      { heading: 'Authentication Persistence', body: 'When sign-in persistence is enabled, authentication state may remain available on the same device until the user signs out.' },
-      { heading: 'Preferences', body: 'Local preferences such as theme choice and AI Analyst cache may be saved in the browser to improve day-to-day usability.' },
-    ],
-  },
-  acceptableUse: {
-    title: 'Acceptable Use Policy',
-    sections: [
-      { heading: 'Authorized Access', body: 'Use this portal only with an account assigned by the restaurant or platform administrator.' },
-      { heading: 'Responsible Usage', body: 'Manage menus, inventory, orders, and analytics carefully. Review changes before saving and protect customer and restaurant information.' },
-      { heading: 'Prohibited Activities', body: 'Do not share credentials, attempt unauthorized branch access, alter records dishonestly, or export data without permission.' },
-    ],
-  },
-};
+/**
+ * Sign-in support.
+ *
+ * This replaced three separate footer dialogs (Cookie Notice, Acceptable Use, and
+ * a long Help block) that each duplicated policies now published as real pages at
+ * /cookies, /acceptable-use and /help. A reader who needed the full policy had to
+ * dismiss a modal to find it; now the overlay is short and the pages are the
+ * source of truth.
+ *
+ * The overlay deliberately preserves the form behind it — entered credentials,
+ * the selected sign-in mode, and the password-reset cooldown all survive opening
+ * and closing it. Closing must never cost someone who half-typed a password.
+ *
+ * Modal handles the W3C dialog pattern: focus trap, Escape, focus return to the
+ * trigger, and background scroll lock. This page's previous hand-rolled overlay
+ * did none of those.
+ */
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -51,10 +44,10 @@ export default function LoginPage() {
   const [mode, setMode] = useState(embedded ? 'login' : 'google');
   const [resetSuccess, setResetSuccess] = useState('');
   const [resetCooldown, setResetCooldown] = useState(0);
-  const [activeFooterContent, setActiveFooterContent] = useState(null);
+  const [showHelp, setShowHelp] = useState(false);
+  const [showMore, setShowMore] = useState(false);
+  const helpTriggerRef = useRef(null);
   const cooldownRef = useRef(null);
-
-  const footerContent = activeFooterContent ? FOOTER_CONTENT[activeFooterContent] : null;
 
   useEffect(() => () => {
     if (cooldownRef.current) clearInterval(cooldownRef.current);
@@ -122,13 +115,13 @@ export default function LoginPage() {
       <div className="lg__box">
         <div className="lg__logoSection">
           <h1 className="lg__brandName">E-Menu Portal</h1>
-          <div className="lg__tagline">Restaurant Operations Management Platform</div>
+          <div className="lg__tagline">Ordering &amp; Operations Management Platform</div>
         </div>
 
         {mode === 'google' ? (
           <div className="lg__form">
             <p className="lg__googleLead">
-              Sign in with your Google account to manage your restaurant operations. We use Google to
+              Sign in with your Google account to manage your business operations. We use Google to
               securely identify you and sync your access across the web dashboard and Android device app.
             </p>
             <button type="button" className="lg__google lg__google--primary" onClick={handleGoogle} disabled={loading}>
@@ -286,45 +279,76 @@ export default function LoginPage() {
         )}
 
         <div className="lg__footer">
-          <Link className="lg__footerLink" to="/about">About</Link>
-          <Link className="lg__footerLink" to="/pricing">Pricing</Link>
-          <Link className="lg__footerLink" to="/contact">Contact</Link>
+          <button
+            type="button"
+            ref={helpTriggerRef}
+            className="lg__footerLink lg__footerLink--strong"
+            onClick={() => setShowHelp(true)}
+          >
+            Need help?
+          </button>
           <Link className="lg__footerLink" to="/terms">Terms</Link>
           <Link className="lg__footerLink" to="/privacy">Privacy</Link>
-          <Link className="lg__footerLink" to="/refund-policy">Refunds</Link>
-          <button type="button" className="lg__footerLink" onClick={() => setActiveFooterContent('help')}>Need Help</button>
-          <button type="button" className="lg__footerLink" onClick={() => setActiveFooterContent('cookies')}>Cookie Notice</button>
-          <button type="button" className="lg__footerLink" onClick={() => setActiveFooterContent('acceptableUse')}>Acceptable Use Policy</button>
+          <div className="lg__more">
+            <button
+              type="button"
+              className="lg__footerLink lg__moreToggle"
+              aria-expanded={showMore}
+              aria-controls="lg-more-links"
+              onClick={() => setShowMore((v) => !v)}
+            >
+              More information
+            </button>
+            {/*
+              The list stays mounted and is hidden with `hidden` rather than
+              unmounted, so `aria-controls` always names an element that exists.
+              A disclosure whose controlled element is absent while collapsed is
+              announced as pointing at nothing.
+            */}
+            <ul className="lg__moreList" id="lg-more-links" hidden={!showMore}>
+              <li><Link className="lg__footerLink" to="/about">About</Link></li>
+              <li><Link className="lg__footerLink" to="/pricing">Pricing</Link></li>
+              <li><Link className="lg__footerLink" to="/help">Help center</Link></li>
+              <li><Link className="lg__footerLink" to="/contact">Contact</Link></li>
+              <li><Link className="lg__footerLink" to="/refund-policy">Refunds</Link></li>
+              <li><Link className="lg__footerLink" to="/cookies">Browser storage</Link></li>
+              <li><Link className="lg__footerLink" to="/acceptable-use">Acceptable use</Link></li>
+            </ul>
+          </div>
         </div>
         <div className="lg__powered">Powered by Touch</div>
       </div>
 
-      {footerContent && (
-        <div className="lg__modalOverlay" onClick={() => setActiveFooterContent(null)}>
-          <div
-            className="lg__modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="footer-info-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="lg__modalHead">
-              <h2 id="footer-info-title">{footerContent.title}</h2>
-              <button type="button" className="lg__modalClose" onClick={() => setActiveFooterContent(null)} aria-label="Close dialog">
-                <X size={16} />
-              </button>
-            </div>
-            <div className="lg__modalBody">
-              {footerContent.sections.map((section) => (
-                <section key={section.heading}>
-                  <h3>{section.heading}</h3>
-                  <p>{section.body}</p>
-                </section>
-              ))}
-            </div>
-          </div>
+      <Modal
+        open={showHelp}
+        onClose={() => setShowHelp(false)}
+        title="Need help?"
+      >
+        <div className="lg__help">
+          <section>
+            <h3>Forgotten password</h3>
+            <p>Use <strong>Forgot Password?</strong> above to email yourself a reset link. If it does not arrive, check your spam folder and wait for the cooldown before asking for another.</p>
+          </section>
+          <section>
+            <h3>No access to your branch</h3>
+            <p>Ask your business owner or a manager to add your email to the branch. Access follows your assigned role, and sign out and back in after a change.</p>
+          </section>
+          <section>
+            <h3>Contact support</h3>
+            {PUBLICATION.supportEmail ? (
+              <p>
+                <a className="lg__helpMail" href={`mailto:${PUBLICATION.supportEmail}`}>{PUBLICATION.supportEmail}</a>
+                <br />
+                <span className="lg__helpHours">{PUBLICATION.supportHours}</span>
+              </p>
+            ) : <p>Email E-Menu support during published support hours.</p>}
+            <p className="lg__helpNote">This opens your email app. Nothing is sent until you send it.</p>
+          </section>
+          <Link className="lg__helpMore" to="/help" onClick={() => setShowHelp(false)}>
+            Read the full Help page
+          </Link>
         </div>
-      )}
+      </Modal>
     </div>
   );
 }

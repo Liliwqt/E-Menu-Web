@@ -223,8 +223,11 @@ export default function App() {
         <Route path="/about" element={<PublicPage />} />
         <Route path="/pricing" element={<PublicPage />} />
         <Route path="/contact" element={<PublicPage />} />
+        <Route path="/help" element={<PublicPage />} />
         <Route path="/terms" element={<PublicPage />} />
         <Route path="/privacy" element={<PublicPage />} />
+        <Route path="/cookies" element={<PublicPage />} />
+        <Route path="/acceptable-use" element={<PublicPage />} />
         <Route path="/refund-policy" element={<PublicPage />} />
         <Route path="/setup" element={<SetupRoute />} />
         <Route path="/home/:branchId" element={shellRoute(DashboardPage)} />

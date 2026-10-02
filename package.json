@@ -8,7 +8,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "node --test",
-    "check:public-release": "node scripts/check-public-release.mjs"
+    "check:public-release": "node scripts/check-public-release.mjs",
+    "verify:public-pages": "node scripts/verify-public-pages.mjs",
+    "verify:public-pages-webview": "node scripts/verify-public-pages-webview.mjs"
   },
   "dependencies": {
     "firebase": "^10.7.1",
